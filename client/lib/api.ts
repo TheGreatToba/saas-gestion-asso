@@ -13,11 +13,26 @@ import type {
   CreateVisitNoteInput,
 } from "@shared/schema";
 
+function getStoredUserId(): string | undefined {
+  try {
+    const stored = localStorage.getItem("socialaid_user");
+    if (stored) {
+      const user = JSON.parse(stored);
+      return user?.id;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const userId = getStoredUserId();
   const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(userId ? { "x-user-id": userId } : {}),
       ...options?.headers,
     },
   });
