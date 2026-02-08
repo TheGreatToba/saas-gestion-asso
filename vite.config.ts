@@ -12,9 +12,10 @@ export default defineConfig(({ mode }) => ({
       allow: [".", "./client", "./shared"],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**"],
     },
-    hmr: mode === "development" ? {
+    hmr: process.env.NODE_ENV === "development" ? {
       host: "localhost",
       port: 8080,
+      protocol: "ws",
     } : false,
   },
   build: {
