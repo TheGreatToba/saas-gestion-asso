@@ -12,9 +12,21 @@ export default defineConfig(({ mode }) => ({
       allow: [".", "./client", "./shared"],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**"],
     },
+    hmr: mode === "development" ? {
+      host: "localhost",
+      port: 8080,
+    } : false,
   },
   build: {
     outDir: "dist/spa",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          query: ["@tanstack/react-query"],
+        },
+      },
+    },
   },
   plugins: [react(), expressPlugin()],
   resolve: {
@@ -22,6 +34,16 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./client"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
+  },
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "@tanstack/react-query",
+      "@radix-ui/react-dialog",
+      "framer-motion",
+    ],
   },
 }));
 
