@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,19 +6,25 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Gift, Calendar } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Gift,
+  Calendar,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  CheckCircle2,
+  Package,
+  X,
+} from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -26,21 +32,40 @@ import { useAuth } from "@/lib/auth";
 import {
   NEED_TYPE_LABELS,
   AID_SOURCE_LABELS,
+  NEED_URGENCY_LABELS,
+  NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { NeedType, AidSource } from "@shared/schema";
+import type { NeedType, AidSource, Need } from "@shared/schema";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
 export default function Aids() {
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
+
+  // Quick-add state
+  const preselectedFamily = searchParams.get("familyId") || "";
+  const [showQuickAdd, setShowQuickAdd] = useState(
+    searchParams.get("action") === "add" || !!preselectedFamily
+  );
+  const [selectedFamilyId, setSelectedFamilyId] = useState(preselectedFamily);
+  const [familySearch, setFamilySearch] = useState("");
+  const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
+  const [selectedType, setSelectedType] = useState<NeedType | "">("");
+  const [quantity, setQuantity] = useState(1);
+  const [source, setSource] = useState<AidSource>("donation");
+  const [showDetails, setShowDetails] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
+
+  // List filter state
   const [filterType, setFilterType] = useState<string>("all");
   const [filterSource, setFilterSource] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [listSearch, setListSearch] = useState("");
 
+  // Data queries
   const { data: aids = [], isLoading } = useQuery({
     queryKey: ["aids-all"],
     queryFn: api.getAids,
@@ -51,23 +76,74 @@ export default function Aids() {
     queryFn: () => api.getFamilies(),
   });
 
-  const { isAdmin } = useAuth();
+  // Family context queries — only when a family is selected
+  const { data: familyNeeds = [] } = useQuery({
+    queryKey: ["family-needs", selectedFamilyId],
+    queryFn: () => api.getNeedsByFamily(selectedFamilyId),
+    enabled: !!selectedFamilyId,
+  });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ["users"],
-    queryFn: api.getUsers,
-    enabled: isAdmin, // Only admins can list users
+  const { data: familyAids = [] } = useQuery({
+    queryKey: ["family-aids", selectedFamilyId],
+    queryFn: () => api.getAidsByFamily(selectedFamilyId),
+    enabled: !!selectedFamilyId,
   });
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
+  const selectedFamily = selectedFamilyId
+    ? familyMap.get(selectedFamilyId)
+    : null;
 
+  // Pending needs (not covered)
+  const pendingNeeds = familyNeeds.filter((n) => n.status !== "covered");
+
+  // Recent aids (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const recentFamilyAids = familyAids
+    .filter((a) => new Date(a.date) >= thirtyDaysAgo)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Redundancy check: what types have already been given recently
+  const recentlyGivenTypes = new Set(recentFamilyAids.map((a) => a.type));
+
+  // Filtered family search
+  const filteredFamilies = useMemo(() => {
+    if (!familySearch) return families;
+    const q = familySearch.toLowerCase();
+    return families.filter(
+      (f) =>
+        f.responsibleName.toLowerCase().includes(q) ||
+        f.neighborhood.toLowerCase().includes(q) ||
+        f.phone.includes(q)
+    );
+  }, [families, familySearch]);
+
+  // Create mutation
   const createMutation = useMutation({
     mutationFn: api.createAid,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["aids-all"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      setShowForm(false);
-      toast({ title: "Aide enregistrée avec succès !" });
+      queryClient.invalidateQueries({
+        queryKey: ["family-aids", selectedFamilyId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["family-needs", selectedFamilyId],
+      });
+      // Reset form but keep family selected for multiple aids
+      setSelectedType("");
+      setQuantity(1);
+      setSource("donation");
+      setNotes("");
+      setProofUrl("");
+      setShowDetails(false);
+      toast({
+        title: "Aide enregistrée !",
+        description: `${selectedFamily?.responsibleName} — ${
+          selectedType ? NEED_TYPE_LABELS[selectedType] : ""
+        }`,
+      });
     },
     onError: (err: Error) => {
       toast({
@@ -78,18 +154,53 @@ export default function Aids() {
     },
   });
 
-  // Filter aids
+  const handleQuickSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFamilyId || !selectedType) return;
+    createMutation.mutate({
+      familyId: selectedFamilyId,
+      type: selectedType as NeedType,
+      quantity,
+      date: new Date().toISOString(),
+      volunteerId: user?.id || "",
+      volunteerName: user?.name || "",
+      source,
+      notes,
+      proofUrl,
+    });
+  };
+
+  const selectNeedAsType = (need: Need) => {
+    setSelectedType(need.type);
+    if (need.details) {
+      setNotes(need.details);
+      setShowDetails(true);
+    }
+  };
+
+  const resetQuickAdd = () => {
+    setSelectedFamilyId("");
+    setSelectedType("");
+    setQuantity(1);
+    setSource("donation");
+    setNotes("");
+    setProofUrl("");
+    setShowDetails(false);
+    setFamilySearch("");
+  };
+
+  // Filter aids for list
   const filtered = aids.filter((aid) => {
     if (filterType !== "all" && aid.type !== filterType) return false;
     if (filterSource !== "all" && aid.source !== filterSource) return false;
-    if (search) {
+    if (listSearch) {
       const family = familyMap.get(aid.familyId);
-      const searchLower = search.toLowerCase();
+      const q = listSearch.toLowerCase();
       if (
-        !family?.responsibleName.toLowerCase().includes(searchLower) &&
-        !family?.neighborhood.toLowerCase().includes(searchLower) &&
-        !aid.volunteerName.toLowerCase().includes(searchLower) &&
-        !NEED_TYPE_LABELS[aid.type].toLowerCase().includes(searchLower)
+        !family?.responsibleName.toLowerCase().includes(q) &&
+        !family?.neighborhood.toLowerCase().includes(q) &&
+        !aid.volunteerName.toLowerCase().includes(q) &&
+        !NEED_TYPE_LABELS[aid.type].toLowerCase().includes(q)
       ) {
         return false;
       }
@@ -97,7 +208,7 @@ export default function Aids() {
     return true;
   });
 
-  // Calculate stats
+  // Stats
   const thisMonth = new Date();
   thisMonth.setDate(1);
   thisMonth.setHours(0, 0, 0, 0);
@@ -111,9 +222,9 @@ export default function Aids() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Aides</h1>
             <p className="text-muted-foreground mt-1">
@@ -123,7 +234,8 @@ export default function Aids() {
                   {aids.length !== 1 ? "s" : ""}
                   {" — "}
                   <span className="text-green-600 font-medium">
-                    {aidsThisMonth.length} ce mois ({totalQuantityThisMonth} unités)
+                    {aidsThisMonth.length} ce mois ({totalQuantityThisMonth}{" "}
+                    unités)
                   </span>
                 </>
               ) : (
@@ -131,13 +243,386 @@ export default function Aids() {
               )}
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Enregistrer une aide
-          </Button>
+          {!showQuickAdd && (
+            <Button
+              onClick={() => setShowQuickAdd(true)}
+              className="gap-2 bg-green-600 hover:bg-green-700"
+              size="lg"
+            >
+              <Zap className="w-5 h-5" />
+              Enregistrer une aide
+            </Button>
+          )}
         </div>
 
-        {/* Stats cards — admin only */}
+        {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
+        {showQuickAdd && (
+          <div className="bg-white rounded-xl border-2 border-green-200 shadow-lg mb-8 overflow-hidden">
+            {/* Panel header */}
+            <div className="bg-green-50 px-6 py-4 flex items-center justify-between border-b border-green-200">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-green-600" />
+                <h2 className="text-lg font-bold text-green-800">
+                  Enregistrement rapide
+                </h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowQuickAdd(false);
+                  resetQuickAdd();
+                }}
+                className="text-green-700 hover:text-green-900"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <form onSubmit={handleQuickSubmit} className="p-6">
+              {/* Step 1: Select Family */}
+              <div className="mb-6">
+                <Label className="text-base font-semibold mb-2 block">
+                  1. Choisir la famille
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                  <Input
+                    placeholder="Tapez le nom ou quartier..."
+                    value={
+                      selectedFamily
+                        ? `${selectedFamily.responsibleName} — ${selectedFamily.neighborhood}`
+                        : familySearch
+                    }
+                    onChange={(e) => {
+                      setFamilySearch(e.target.value);
+                      setSelectedFamilyId("");
+                      setShowFamilyDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (!selectedFamilyId) setShowFamilyDropdown(true);
+                    }}
+                    className="pl-10 h-12 text-base"
+                  />
+                  {selectedFamilyId && (
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setSelectedFamilyId("");
+                        setFamilySearch("");
+                        setSelectedType("");
+                        setShowFamilyDropdown(true);
+                      }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {showFamilyDropdown && !selectedFamilyId && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredFamilies.length === 0 ? (
+                        <p className="p-4 text-sm text-muted-foreground">
+                          Aucune famille trouvée
+                        </p>
+                      ) : (
+                        filteredFamilies.map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            className="w-full text-left px-4 py-3 hover:bg-green-50 transition flex justify-between items-center border-b last:border-b-0"
+                            onClick={() => {
+                              setSelectedFamilyId(f.id);
+                              setFamilySearch("");
+                              setShowFamilyDropdown(false);
+                            }}
+                          >
+                            <div>
+                              <p className="font-medium">
+                                {f.responsibleName}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {f.neighborhood} — {f.memberCount} membres,{" "}
+                                {f.childrenCount} enfant
+                                {f.childrenCount !== 1 ? "s" : ""}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={
+                                f.situation === "insured"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className="shrink-0 ml-2"
+                            >
+                              {f.situation === "insured"
+                                ? "Assuré"
+                                : "Non assuré"}
+                            </Badge>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Family Context — only when family selected */}
+              {selectedFamily && (
+                <div className="mb-6 space-y-4">
+                  {/* Pending Needs */}
+                  {pendingNeeds.length > 0 && (
+                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                      <p className="text-sm font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        Besoins en attente ({pendingNeeds.length})
+                        <span className="font-normal text-orange-600">
+                          — cliquez pour enregistrer
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {pendingNeeds.map((need) => (
+                          <button
+                            key={need.id}
+                            type="button"
+                            onClick={() => selectNeedAsType(need)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                              selectedType === need.type
+                                ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
+                                : "bg-white border-orange-200 text-orange-800 hover:bg-orange-100"
+                            }`}
+                          >
+                            {selectedType === need.type && (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            {NEED_TYPE_LABELS[need.type]}
+                            {need.details && (
+                              <span className="text-xs opacity-75">
+                                ({need.details})
+                              </span>
+                            )}
+                            <Badge
+                              variant={
+                                need.urgency === "high"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              {NEED_URGENCY_LABELS[need.urgency]}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Aids - Anti-redundancy */}
+                  {recentFamilyAids.length > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <p className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                        <Package className="w-4 h-4" />
+                        Déjà donné récemment
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {recentFamilyAids.slice(0, 6).map((aid) => (
+                          <span
+                            key={aid.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs bg-blue-100 text-blue-700 border border-blue-200"
+                          >
+                            {NEED_TYPE_LABELS[aid.type]} x{aid.quantity}
+                            <span className="opacity-60">
+                              (
+                              {formatDistanceToNow(new Date(aid.date), {
+                                addSuffix: false,
+                                locale: fr,
+                              })}
+                              )
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pendingNeeds.length === 0 &&
+                    recentFamilyAids.length === 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          Aucun besoin en attente et aucune aide récente pour
+                          cette famille.
+                        </p>
+                      </div>
+                    )}
+                </div>
+              )}
+
+              {/* Step 2: Type + Quick options */}
+              {selectedFamilyId && (
+                <>
+                  <div className="mb-4">
+                    <Label className="text-base font-semibold mb-2 block">
+                      2. Type d'aide
+                      {pendingNeeds.length > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                          (ou sélectionnez un besoin ci-dessus)
+                        </span>
+                      )}
+                    </Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => {
+                        const isRedundant = recentlyGivenTypes.has(
+                          val as NeedType
+                        );
+                        const isSelected = selectedType === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() =>
+                              setSelectedType(val as NeedType)
+                            }
+                            className={`relative px-3 py-3 rounded-lg text-sm font-medium border transition-all ${
+                              isSelected
+                                ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
+                                : isRedundant
+                                ? "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
+                                : "bg-white border-gray-200 text-foreground hover:bg-gray-50"
+                            }`}
+                          >
+                            {label}
+                            {isRedundant && !isSelected && (
+                              <span className="block text-[10px] text-blue-500 mt-0.5">
+                                Déjà donné
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Step 3: Quantity + Source (compact row) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                    <div className="space-y-1">
+                      <Label className="text-sm">Quantité</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={quantity}
+                        onChange={(e) =>
+                          setQuantity(parseInt(e.target.value) || 1)
+                        }
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">Source</Label>
+                      <Select
+                        value={source}
+                        onValueChange={(v) => setSource(v as AidSource)}
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(AID_SOURCE_LABELS).map(
+                            ([val, label]) => (
+                              <SelectItem key={val} value={val}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 flex items-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowDetails(!showDetails)}
+                        className="text-muted-foreground gap-1"
+                      >
+                        {showDetails ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                        {showDetails
+                          ? "Masquer les détails"
+                          : "Détails optionnels"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Optional Details */}
+                  {showDetails && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="space-y-1">
+                        <Label className="text-sm">Notes</Label>
+                        <Textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          rows={2}
+                          placeholder="Détails de l'aide..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm">
+                          Preuve (lien photo/document)
+                        </Label>
+                        <Input
+                          type="url"
+                          value={proofUrl}
+                          onChange={(e) => setProofUrl(e.target.value)}
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submit */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-center">
+                    <Button
+                      type="submit"
+                      size="lg"
+                      disabled={
+                        !selectedType || createMutation.isPending
+                      }
+                      className="w-full sm:w-auto bg-green-600 hover:bg-green-700 gap-2 h-12 px-8 text-base"
+                    >
+                      {createMutation.isPending ? (
+                        "Enregistrement..."
+                      ) : (
+                        <>
+                          <Gift className="w-5 h-5" />
+                          Enregistrer l'aide
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={resetQuickAdd}
+                      className="text-muted-foreground"
+                    >
+                      Réinitialiser
+                    </Button>
+                    {selectedType && recentlyGivenTypes.has(selectedType) && (
+                      <p className="text-xs text-blue-600 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Ce type d'aide a déjà été donné récemment à cette
+                        famille
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+        )}
+
+        {/* ═══════════ STATS (admin) ═══════════ */}
         {isAdmin && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {Object.entries(NEED_TYPE_LABELS)
@@ -152,7 +637,9 @@ export default function Aids() {
                     className="bg-white rounded-lg border border-gray-200 p-4"
                   >
                     <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-2xl font-bold text-foreground">{count}</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {count}
+                    </p>
                     <p className="text-xs text-muted-foreground">ce mois</p>
                   </div>
                 );
@@ -160,15 +647,15 @@ export default function Aids() {
           </div>
         )}
 
-        {/* Search + Filters — full for admin, simple for volunteer */}
+        {/* ═══════════ SEARCH + FILTERS ═══════════ */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par famille..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher dans l'historique..."
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -205,7 +692,7 @@ export default function Aids() {
           </div>
         </div>
 
-        {/* List */}
+        {/* ═══════════ AIDS LIST ═══════════ */}
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -221,7 +708,9 @@ export default function Aids() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <Gift className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <p className="text-muted-foreground text-lg">Aucune aide trouvée</p>
+            <p className="text-muted-foreground text-lg">
+              Aucune aide trouvée
+            </p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -260,10 +749,22 @@ export default function Aids() {
                           {aid.notes}
                         </p>
                       )}
+                      {aid.proofUrl && (
+                        <a
+                          href={aid.proofUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                        >
+                          Voir la preuve
+                        </a>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
                       <Calendar className="w-4 h-4" />
-                      {format(new Date(aid.date), "d MMM yyyy", { locale: fr })}
+                      {format(new Date(aid.date), "d MMM yyyy", {
+                        locale: fr,
+                      })}
                     </div>
                   </div>
                 </div>
@@ -271,121 +772,6 @@ export default function Aids() {
             })}
           </div>
         )}
-
-        {/* Create Dialog */}
-        <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Enregistrer une aide</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                createMutation.mutate({
-                  familyId: fd.get("familyId") as string,
-                  type: fd.get("type") as NeedType,
-                  quantity: parseInt(fd.get("quantity") as string) || 1,
-                  date: new Date(fd.get("date") as string).toISOString(),
-                  volunteerId: user?.id || "",
-                  volunteerName: user?.name || "",
-                  source: fd.get("source") as AidSource,
-                  notes: fd.get("notes") as string,
-                });
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label>Famille *</Label>
-                <select
-                  name="familyId"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
-                  required
-                >
-                  <option value="">Sélectionner une famille</option>
-                  {families.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.responsibleName} — {f.neighborhood}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Type d'aide *</Label>
-                  <select
-                    name="type"
-                    className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
-                    required
-                  >
-                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Source *</Label>
-                  <select
-                    name="source"
-                    className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
-                    required
-                  >
-                    {Object.entries(AID_SOURCE_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Quantité *</Label>
-                  <Input
-                    name="quantity"
-                    type="number"
-                    min={1}
-                    defaultValue={1}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Date *</Label>
-                  <Input
-                    name="date"
-                    type="date"
-                    defaultValue={new Date().toISOString().split("T")[0]}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  name="notes"
-                  rows={2}
-                  placeholder="Détails de l'aide..."
-                />
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowForm(false)}
-                >
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending
-                    ? "Enregistrement..."
-                    : "Enregistrer"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );

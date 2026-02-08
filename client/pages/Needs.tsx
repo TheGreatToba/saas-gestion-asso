@@ -47,6 +47,7 @@ export default function Needs() {
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterNeighborhood, setFilterNeighborhood] = useState<string>("all");
   const [search, setSearch] = useState("");
 
   const { data: needs = [], isLoading } = useQuery({
@@ -60,6 +61,9 @@ export default function Needs() {
   });
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
+
+  // Extract unique neighborhoods for filter
+  const neighborhoods = [...new Set(families.map((f) => f.neighborhood))].sort();
 
   const createMutation = useMutation({
     mutationFn: api.createNeed,
@@ -98,6 +102,10 @@ export default function Needs() {
     if (filterUrgency !== "all" && need.urgency !== filterUrgency) return false;
     if (filterType !== "all" && need.type !== filterType) return false;
     if (filterStatus !== "all" && need.status !== filterStatus) return false;
+    if (filterNeighborhood !== "all") {
+      const family = familyMap.get(need.familyId);
+      if (family?.neighborhood !== filterNeighborhood) return false;
+    }
     if (search) {
       const family = familyMap.get(need.familyId);
       const searchLower = search.toLowerCase();
@@ -220,6 +228,19 @@ export default function Needs() {
                     <SelectItem value="pending">En attente</SelectItem>
                     <SelectItem value="partial">Partiellement couvert</SelectItem>
                     <SelectItem value="covered">Couvert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterNeighborhood} onValueChange={setFilterNeighborhood}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Quartier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tout quartier</SelectItem>
+                    {neighborhoods.map((n) => (
+                      <SelectItem key={n} value={n}>
+                        {n}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

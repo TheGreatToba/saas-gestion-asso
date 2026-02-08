@@ -190,14 +190,14 @@ class Storage {
 
     // ---- Aids ----
     this.aids = [
-      { id: "aid-001", familyId: "fam-001", type: "food", quantity: 1, date: daysAgo(2), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Colis alimentaire complet", createdAt: daysAgo(2) },
-      { id: "aid-002", familyId: "fam-002", type: "food", quantity: 1, date: daysAgo(5), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "", createdAt: daysAgo(5) },
-      { id: "aid-003", familyId: "fam-003", type: "diapers", quantity: 3, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "purchase", notes: "3 paquets taille 4", createdAt: daysAgo(4) },
-      { id: "aid-004", familyId: "fam-003", type: "clothes", quantity: 5, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Vêtements 2 ans", createdAt: daysAgo(4) },
-      { id: "aid-005", familyId: "fam-005", type: "diapers", quantity: 2, date: daysAgo(8), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "partner", notes: "Partenariat pharmacie locale", createdAt: daysAgo(8) },
-      { id: "aid-006", familyId: "fam-006", type: "medical", quantity: 1, date: daysAgo(3), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "partner", notes: "Consultation pédiatrique via partenaire", createdAt: daysAgo(3) },
-      { id: "aid-007", familyId: "fam-001", type: "clothes", quantity: 8, date: daysAgo(15), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "Vêtements enfants divers", createdAt: daysAgo(15) },
-      { id: "aid-008", familyId: "fam-002", type: "blankets", quantity: 2, date: daysAgo(20), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "", createdAt: daysAgo(20) },
+      { id: "aid-001", familyId: "fam-001", type: "food", quantity: 1, date: daysAgo(2), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Colis alimentaire complet", proofUrl: "", createdAt: daysAgo(2) },
+      { id: "aid-002", familyId: "fam-002", type: "food", quantity: 1, date: daysAgo(5), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "", proofUrl: "", createdAt: daysAgo(5) },
+      { id: "aid-003", familyId: "fam-003", type: "diapers", quantity: 3, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "purchase", notes: "3 paquets taille 4", proofUrl: "https://example.com/photo-couches.jpg", createdAt: daysAgo(4) },
+      { id: "aid-004", familyId: "fam-003", type: "clothes", quantity: 5, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Vêtements 2 ans", proofUrl: "", createdAt: daysAgo(4) },
+      { id: "aid-005", familyId: "fam-005", type: "diapers", quantity: 2, date: daysAgo(8), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "partner", notes: "Partenariat pharmacie locale", proofUrl: "https://example.com/facture-pharmacie.jpg", createdAt: daysAgo(8) },
+      { id: "aid-006", familyId: "fam-006", type: "medical", quantity: 1, date: daysAgo(3), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "partner", notes: "Consultation pédiatrique via partenaire", proofUrl: "", createdAt: daysAgo(3) },
+      { id: "aid-007", familyId: "fam-001", type: "clothes", quantity: 8, date: daysAgo(15), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "Vêtements enfants divers", proofUrl: "", createdAt: daysAgo(15) },
+      { id: "aid-008", familyId: "fam-002", type: "blankets", quantity: 2, date: daysAgo(20), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "", proofUrl: "", createdAt: daysAgo(20) },
     ];
 
     // ---- Visit Notes ----
@@ -380,6 +380,12 @@ class Storage {
       createdAt: now(),
     };
     this.aids.push(aid);
+    // Aide apportée = famille visitée
+    const family = this.families.find((f) => f.id === input.familyId);
+    if (family) {
+      family.lastVisitAt = input.date || now();
+      family.updatedAt = now();
+    }
     return aid;
   }
 
