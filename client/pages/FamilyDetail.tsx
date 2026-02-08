@@ -57,7 +57,7 @@ import { fr } from "date-fns/locale";
 
 export default function FamilyDetail() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddNeed, setShowAddNeed] = useState(false);
@@ -377,18 +377,20 @@ export default function FamilyDetail() {
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => {
-                          if (confirm("Supprimer cet enfant ?")) {
-                            deleteChildMutation.mutate(child.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => {
+                            if (confirm("Supprimer cet enfant ?")) {
+                              deleteChildMutation.mutate(child.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>

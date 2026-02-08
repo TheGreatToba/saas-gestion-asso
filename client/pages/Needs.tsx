@@ -34,11 +34,13 @@ import {
   NEED_STATUS_LABELS,
 } from "@shared/schema";
 import type { NeedType, NeedUrgency, NeedStatus, Need, Family } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
 export default function Needs() {
+  const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
@@ -138,18 +140,24 @@ export default function Needs() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Besoins</h1>
             <p className="text-muted-foreground mt-1">
-              {needs.length} besoin{needs.length !== 1 ? "s" : ""} enregistré
-              {needs.length !== 1 ? "s" : ""}
-              {urgentCount > 0 && (
-                <span className="text-red-600 font-medium ml-2">
-                  — {urgentCount} urgent{urgentCount !== 1 ? "s" : ""}
-                </span>
+              {isAdmin ? (
+                <>
+                  {needs.length} besoin{needs.length !== 1 ? "s" : ""} enregistré
+                  {needs.length !== 1 ? "s" : ""}
+                  {urgentCount > 0 && (
+                    <span className="text-red-600 font-medium ml-2">
+                      — {urgentCount} urgent{urgentCount !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </>
+              ) : (
+                "Signalez et mettez à jour les besoins des familles"
               )}
             </p>
           </div>
           <Button onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="w-4 h-4" />
-            Nouveau besoin
+            {isAdmin ? "Nouveau besoin" : "Signaler un besoin"}
           </Button>
         </div>
 
@@ -165,7 +173,7 @@ export default function Needs() {
           </div>
         )}
 
-        {/* Search + Filters */}
+        {/* Search + Filters — full filters for admin, simple search for volunteer */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
@@ -177,43 +185,57 @@ export default function Needs() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
+            {isAdmin ? (
+              <div className="flex gap-2 flex-wrap">
+                <Select value={filterUrgency} onValueChange={setFilterUrgency}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Urgence" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toute urgence</SelectItem>
+                    <SelectItem value="high">Élevée</SelectItem>
+                    <SelectItem value="medium">Moyenne</SelectItem>
+                    <SelectItem value="low">Faible</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tout type</SelectItem>
+                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
+                      <SelectItem key={val} value={val}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tout statut</SelectItem>
+                    <SelectItem value="pending">En attente</SelectItem>
+                    <SelectItem value="partial">Partiellement couvert</SelectItem>
+                    <SelectItem value="covered">Couvert</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
               <Select value={filterUrgency} onValueChange={setFilterUrgency}>
                 <SelectTrigger className="w-36">
                   <SelectValue placeholder="Urgence" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toute urgence</SelectItem>
-                  <SelectItem value="high">Élevée</SelectItem>
-                  <SelectItem value="medium">Moyenne</SelectItem>
+                  <SelectItem value="high">Urgent</SelectItem>
+                  <SelectItem value="medium">Moyen</SelectItem>
                   <SelectItem value="low">Faible</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tout type</SelectItem>
-                  {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tout statut</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="partial">Partiellement couvert</SelectItem>
-                  <SelectItem value="covered">Couvert</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            )}
           </div>
         </div>
 
@@ -323,18 +345,20 @@ export default function Needs() {
                           <SelectItem value="covered">Couvert</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => {
-                          if (confirm("Supprimer ce besoin ?")) {
-                            deleteMutation.mutate(need.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => {
+                            if (confirm("Supprimer ce besoin ?")) {
+                              deleteMutation.mutate(need.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

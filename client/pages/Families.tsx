@@ -34,6 +34,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { FAMILY_SITUATION_LABELS } from "@shared/schema";
 import type { CreateFamilyInput, Family } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -50,6 +51,7 @@ const emptyForm: CreateFamilyInput = {
 };
 
 export default function Families() {
+  const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -138,8 +140,9 @@ export default function Families() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Familles</h1>
             <p className="text-muted-foreground mt-1">
-              {families.length} famille{families.length !== 1 ? "s" : ""}{" "}
-              enregistrée{families.length !== 1 ? "s" : ""}
+              {isAdmin
+                ? `${families.length} famille${families.length !== 1 ? "s" : ""} enregistrée${families.length !== 1 ? "s" : ""}`
+                : "Consultez et mettez à jour les informations des familles"}
             </p>
           </div>
           <Button onClick={() => setShowForm(true)} className="gap-2">
@@ -245,7 +248,7 @@ export default function Families() {
                     <Link to={`/families/${family.id}`}>
                       <Button variant="outline" size="sm" className="gap-1.5">
                         <Eye className="w-3.5 h-3.5" />
-                        Voir
+                        {isAdmin ? "Voir" : "Ouvrir"}
                       </Button>
                     </Link>
                     <Button
@@ -255,19 +258,22 @@ export default function Families() {
                       onClick={() => openEdit(family)}
                     >
                       <Edit className="w-3.5 h-3.5" />
+                      {!isAdmin && "Modifier"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => {
-                        if (confirm("Supprimer cette famille et toutes ses données ?")) {
-                          deleteMutation.mutate(family.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (confirm("Supprimer cette famille et toutes ses données ?")) {
+                            deleteMutation.mutate(family.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

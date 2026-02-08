@@ -51,9 +51,12 @@ export default function Aids() {
     queryFn: () => api.getFamilies(),
   });
 
+  const { isAdmin } = useAuth();
+
   const { data: users = [] } = useQuery({
     queryKey: ["users"],
     queryFn: api.getUsers,
+    enabled: isAdmin, // Only admins can list users
   });
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
@@ -114,12 +117,18 @@ export default function Aids() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Aides</h1>
             <p className="text-muted-foreground mt-1">
-              {aids.length} aide{aids.length !== 1 ? "s" : ""} enregistrée
-              {aids.length !== 1 ? "s" : ""}
-              {" — "}
-              <span className="text-green-600 font-medium">
-                {aidsThisMonth.length} ce mois ({totalQuantityThisMonth} unités)
-              </span>
+              {isAdmin ? (
+                <>
+                  {aids.length} aide{aids.length !== 1 ? "s" : ""} enregistrée
+                  {aids.length !== 1 ? "s" : ""}
+                  {" — "}
+                  <span className="text-green-600 font-medium">
+                    {aidsThisMonth.length} ce mois ({totalQuantityThisMonth} unités)
+                  </span>
+                </>
+              ) : (
+                "Enregistrez les aides apportées aux familles"
+              )}
             </p>
           </div>
           <Button onClick={() => setShowForm(true)} className="gap-2">
@@ -128,67 +137,71 @@ export default function Aids() {
           </Button>
         </div>
 
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          {Object.entries(NEED_TYPE_LABELS)
-            .slice(0, 4)
-            .map(([type, label]) => {
-              const count = aidsThisMonth.filter(
-                (a) => a.type === type
-              ).length;
-              return (
-                <div
-                  key={type}
-                  className="bg-white rounded-lg border border-gray-200 p-4"
-                >
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="text-2xl font-bold text-foreground">{count}</p>
-                  <p className="text-xs text-muted-foreground">ce mois</p>
-                </div>
-              );
-            })}
-        </div>
+        {/* Stats cards — admin only */}
+        {isAdmin && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            {Object.entries(NEED_TYPE_LABELS)
+              .slice(0, 4)
+              .map(([type, label]) => {
+                const count = aidsThisMonth.filter(
+                  (a) => a.type === type
+                ).length;
+                return (
+                  <div
+                    key={type}
+                    className="bg-white rounded-lg border border-gray-200 p-4"
+                  >
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-2xl font-bold text-foreground">{count}</p>
+                    <p className="text-xs text-muted-foreground">ce mois</p>
+                  </div>
+                );
+              })}
+          </div>
+        )}
 
-        {/* Search + Filters */}
+        {/* Search + Filters — full for admin, simple for volunteer */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par famille, bénévole..."
+                placeholder="Rechercher par famille..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tout type</SelectItem>
-                  {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterSource} onValueChange={setFilterSource}>
-                <SelectTrigger className="w-36">
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toute source</SelectItem>
-                  {Object.entries(AID_SOURCE_LABELS).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isAdmin && (
+              <div className="flex gap-2 flex-wrap">
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tout type</SelectItem>
+                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
+                      <SelectItem key={val} value={val}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toute source</SelectItem>
+                    {Object.entries(AID_SOURCE_LABELS).map(([val, label]) => (
+                      <SelectItem key={val} value={val}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
 
