@@ -31,9 +31,10 @@ import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
 import {
   AID_SOURCE_LABELS,
-  NEED_URGENCY_LABELS,
+  NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { AidSource, Need } from "@shared/schema";
+import type { AidSource, EnrichedNeed } from "@shared/schema";
+import { statusBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -162,7 +163,7 @@ export default function Aids() {
     });
   };
 
-  const selectNeedAsType = (need: Need) => {
+  const selectNeedAsType = (need: EnrichedNeed) => {
     setSelectedType(need.type);
     setSelectedArticleId("");
     if (need.details) {
@@ -318,8 +319,8 @@ export default function Aids() {
                             {selectedType === need.type && <CheckCircle2 className="w-3.5 h-3.5" />}
                             {getCategoryLabel(need.type)}
                             {need.details && <span className="text-xs opacity-75">({need.details})</span>}
-                            <Badge variant={need.urgency === "high" ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
-                              {NEED_URGENCY_LABELS[need.urgency]}
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusBadgeClasses(need.status)}`}>
+                              {NEED_STATUS_LABELS[need.status]}
                             </Badge>
                           </button>
                         ))}

@@ -23,7 +23,10 @@ import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
 import {
   NEED_URGENCY_LABELS,
+  PRIORITY_LABELS,
 } from "@shared/schema";
+import type { EnrichedNeed } from "@shared/schema";
+import { statusBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -212,8 +215,10 @@ function AdminDashboard() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                          {NEED_URGENCY_LABELS[need.urgency]}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${priorityBadgeClasses((need as unknown as EnrichedNeed).priorityLevel || "high")}`}>
+                          {(need as unknown as EnrichedNeed).priorityLevel
+                            ? PRIORITY_LABELS[(need as unknown as EnrichedNeed).priorityLevel]
+                            : NEED_URGENCY_LABELS[need.urgency]}
                         </span>
                         <Link to={`/aids?action=add&familyId=${need.familyId}`}>
                           <Button
@@ -493,8 +498,10 @@ function VolunteerDashboard() {
                     )}
                   </Link>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                      Urgent
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${priorityBadgeClasses((need as unknown as EnrichedNeed).priorityLevel || "high")}`}>
+                      {(need as unknown as EnrichedNeed).priorityLevel
+                        ? PRIORITY_LABELS[(need as unknown as EnrichedNeed).priorityLevel]
+                        : "Urgent"}
                     </span>
                     <Link to={`/aids?action=add&familyId=${need.familyId}`}>
                       <Button

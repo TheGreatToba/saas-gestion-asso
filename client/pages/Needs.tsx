@@ -32,8 +32,10 @@ import { useCategories } from "@/lib/useCategories";
 import {
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
+  PRIORITY_LABELS,
 } from "@shared/schema";
-import type { NeedUrgency, NeedStatus, Need, Family } from "@shared/schema";
+import type { NeedUrgency, NeedStatus, EnrichedNeed, Family } from "@shared/schema";
+import { statusBadgeClasses, urgencyBadgeClasses, priorityBadgeClasses, priorityBorderClass } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -122,15 +124,10 @@ export default function Needs() {
     return true;
   });
 
-  // Sort: high urgency first, then pending, then by date
+  // Sort by dynamic priority score (highest first — already sorted by API, but re-sort after filtering)
   const sorted = [...filtered].sort((a, b) => {
-    const urgencyOrder = { high: 0, medium: 1, low: 2 };
-    const statusOrder = { pending: 0, partial: 1, covered: 2 };
-    if (urgencyOrder[a.urgency] !== urgencyOrder[b.urgency]) {
-      return urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
-    }
-    if (statusOrder[a.status] !== statusOrder[b.status]) {
-      return statusOrder[a.status] - statusOrder[b.status];
+    if (a.priorityScore !== b.priorityScore) {
+      return b.priorityScore - a.priorityScore;
     }
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
@@ -286,13 +283,7 @@ export default function Needs() {
               return (
                 <div
                   key={need.id}
-                  className={`bg-white rounded-lg border shadow-sm p-5 ${
-                    need.urgency === "high" && need.status !== "covered"
-                      ? "border-l-4 border-l-red-500"
-                      : need.urgency === "medium" && need.status !== "covered"
-                      ? "border-l-4 border-l-yellow-500"
-                      : "border-gray-200"
-                  }`}
+                  className={`bg-white rounded-lg border shadow-sm p-5 ${priorityBorderClass(need.priorityLevel)}`}
                 >
                   <div className="flex flex-col sm:flex-row justify-between gap-3">
                     <div className="flex-1">
@@ -301,27 +292,20 @@ export default function Needs() {
                           {getCategoryLabel(need.type)}
                         </span>
                         <Badge
-                          variant={
-                            need.urgency === "high"
-                              ? "destructive"
-                              : need.urgency === "medium"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {NEED_URGENCY_LABELS[need.urgency]}
-                        </Badge>
-                        <Badge
-                          variant={
-                            need.status === "covered"
-                              ? "default"
-                              : need.status === "partial"
-                              ? "secondary"
-                              : "outline"
-                          }
+                          variant="outline"
+                          className={statusBadgeClasses(need.status)}
                         >
                           {NEED_STATUS_LABELS[need.status]}
                         </Badge>
+                        <Badge
+                          variant="outline"
+                          className={priorityBadgeClasses(need.priorityLevel)}
+                        >
+                          {PRIORITY_LABELS[need.priorityLevel]}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          (score: {need.priorityScore})
+                        </span>
                       </div>
                       {family && (
                         <Link

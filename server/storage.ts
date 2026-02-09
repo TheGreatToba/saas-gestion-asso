@@ -533,6 +533,22 @@ class Storage {
         art.stockQuantity = Math.max(0, art.stockQuantity - (input.quantity || 1));
       }
     }
+
+    // Auto-update matching pending/partial needs for this family
+    // When an aid of a certain type is given, mark matching needs as partially covered or covered
+    const matchingNeeds = this.needs.filter(
+      (n) => n.familyId === input.familyId && n.type === input.type && n.status !== "covered"
+    );
+    for (const need of matchingNeeds) {
+      // If need was pending → partial, if partial → covered
+      if (need.status === "pending") {
+        need.status = "partial";
+      } else if (need.status === "partial") {
+        need.status = "covered";
+      }
+      need.updatedAt = now();
+    }
+
     return aid;
   }
 

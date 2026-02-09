@@ -41,6 +41,7 @@ import {
   FAMILY_SITUATION_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
+  PRIORITY_LABELS,
   AID_SOURCE_LABELS,
   CHILD_SEX_LABELS,
 } from "@shared/schema";
@@ -49,7 +50,9 @@ import type {
   AidSource,
   ChildSex,
   NeedStatus,
+  EnrichedNeed,
 } from "@shared/schema";
+import { statusBadgeClasses, urgencyBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -200,7 +203,7 @@ export default function FamilyDetail() {
       type: "need" as const,
       date: n.createdAt,
       title: `Besoin : ${getCategoryLabel(n.type)}`,
-      subtitle: `Urgence : ${NEED_URGENCY_LABELS[n.urgency]} — ${NEED_STATUS_LABELS[n.status]}`,
+      subtitle: `${NEED_STATUS_LABELS[n.status]} — Priorité : ${(n as EnrichedNeed).priorityLevel ? PRIORITY_LABELS[(n as EnrichedNeed).priorityLevel] : NEED_URGENCY_LABELS[n.urgency]}`,
       notes: n.comment,
     })),
     ...notes.map((n) => ({
@@ -429,17 +432,19 @@ export default function FamilyDetail() {
                             {getCategoryLabel(need.type)}
                           </p>
                           <Badge
-                            variant={
-                              need.urgency === "high"
-                                ? "destructive"
-                                : need.urgency === "medium"
-                                ? "default"
-                                : "secondary"
-                            }
-                            className="text-xs"
+                            variant="outline"
+                            className={`text-xs ${statusBadgeClasses(need.status)}`}
                           >
-                            {NEED_URGENCY_LABELS[need.urgency]}
+                            {NEED_STATUS_LABELS[need.status]}
                           </Badge>
+                          {(need as EnrichedNeed).priorityLevel && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${priorityBadgeClasses((need as EnrichedNeed).priorityLevel)}`}
+                            >
+                              {PRIORITY_LABELS[(need as EnrichedNeed).priorityLevel]}
+                            </Badge>
+                          )}
                         </div>
                         {need.details && (
                           <p className="text-sm text-muted-foreground">
@@ -765,10 +770,10 @@ export default function FamilyDetail() {
                       {getCategoryLabel(need.type)}
                       {need.details && <span className="opacity-70">({need.details})</span>}
                       <Badge
-                        variant={need.urgency === "high" ? "destructive" : "secondary"}
-                        className="text-[10px] px-1 py-0"
+                        variant="outline"
+                        className={`text-[10px] px-1 py-0 ${statusBadgeClasses(need.status)}`}
                       >
-                        {NEED_URGENCY_LABELS[need.urgency]}
+                        {NEED_STATUS_LABELS[need.status]}
                       </Badge>
                     </button>
                   ))}

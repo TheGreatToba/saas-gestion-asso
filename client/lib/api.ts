@@ -2,6 +2,7 @@ import type {
   Family,
   Child,
   Need,
+  EnrichedNeed,
   Aid,
   VisitNote,
   DashboardStats,
@@ -140,11 +141,11 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Needs
-  getNeeds: () => fetchJson<Need[]>("/api/needs"),
+  // Needs (API returns enriched needs with priority score/level)
+  getNeeds: () => fetchJson<EnrichedNeed[]>("/api/needs"),
 
   getNeedsByFamily: (familyId: string) =>
-    fetchJson<Need[]>(`/api/families/${familyId}/needs`),
+    fetchJson<EnrichedNeed[]>(`/api/families/${familyId}/needs`),
 
   createNeed: (data: CreateNeedInput) =>
     fetchJson<Need>("/api/needs", {

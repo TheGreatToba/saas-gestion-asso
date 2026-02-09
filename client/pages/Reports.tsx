@@ -19,9 +19,12 @@ import { useCategories } from "@/lib/useCategories";
 import {
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
+  PRIORITY_LABELS,
   AID_SOURCE_LABELS,
   FAMILY_SITUATION_LABELS,
 } from "@shared/schema";
+import type { EnrichedNeed } from "@shared/schema";
+import { statusBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -423,15 +426,12 @@ export default function Reports() {
                         </td>
                         <td className="py-3">
                           <Badge
-                            variant={
-                              need.urgency === "high"
-                                ? "destructive"
-                                : need.urgency === "medium"
-                                ? "default"
-                                : "secondary"
-                            }
+                            variant="outline"
+                            className={priorityBadgeClasses((need as unknown as EnrichedNeed).priorityLevel || "medium")}
                           >
-                            {NEED_URGENCY_LABELS[need.urgency]}
+                            {(need as unknown as EnrichedNeed).priorityLevel
+                              ? PRIORITY_LABELS[(need as unknown as EnrichedNeed).priorityLevel]
+                              : NEED_URGENCY_LABELS[need.urgency]}
                           </Badge>
                         </td>
                         <td className="py-3">
