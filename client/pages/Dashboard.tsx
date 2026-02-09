@@ -115,6 +115,48 @@ function AdminDashboard() {
         })}
       </div>
 
+      {/* Stock Alerts Banner - full width, right after stats */}
+      {lowStockArticles.length > 0 && (
+        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border border-orange-200 p-5 mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="w-5 h-5 text-orange-600" />
+              <h3 className="font-bold text-foreground">Alertes stock</h3>
+              <Badge variant="destructive">
+                {lowStockArticles.length} article{lowStockArticles.length !== 1 ? "s" : ""}
+              </Badge>
+            </div>
+            <Link to="/stock">
+              <Button variant="outline" size="sm" className="gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-100">
+                <Package className="w-3.5 h-3.5" />
+                Gérer le stock
+              </Button>
+            </Link>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lowStockArticles.slice(0, 10).map((art) => (
+              <Link key={art.id} to="/stock">
+                <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition hover:shadow-sm ${
+                  art.stockQuantity === 0
+                    ? "bg-red-100 border-red-300 text-red-800"
+                    : "bg-orange-100 border-orange-300 text-orange-800"
+                }`}>
+                  <Package className="w-3.5 h-3.5 opacity-60" />
+                  <span className="font-medium">{art.name}</span>
+                  <span className="text-xs opacity-70">{getCategoryLabel(art.categoryId)}</span>
+                  <Badge variant={art.stockQuantity === 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                    {art.stockQuantity === 0 ? "Rupture" : `${art.stockQuantity} ${art.unit}`}
+                  </Badge>
+                </div>
+              </Link>
+            ))}
+            {lowStockArticles.length > 10 && (
+              <span className="self-center text-sm text-orange-600 font-medium">+{lowStockArticles.length - 10} autres</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Urgent Needs */}
         <div className="lg:col-span-2">
@@ -297,48 +339,7 @@ function AdminDashboard() {
             </Link>
           </div>
 
-          {/* Stock Alerts */}
-          {lowStockArticles.length > 0 && (
-            <div className="bg-white rounded-lg border border-orange-200 shadow-sm p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingDown className="w-5 h-5 text-orange-600" />
-                <h3 className="font-bold text-foreground">Alertes stock</h3>
-                <Badge variant="destructive" className="ml-auto">
-                  {lowStockArticles.length}
-                </Badge>
-              </div>
-              <div className="space-y-3">
-                {lowStockArticles.slice(0, 6).map((art) => (
-                  <div
-                    key={art.id}
-                    className={`flex items-center justify-between p-3 rounded-lg ${
-                      art.stockQuantity === 0
-                        ? "bg-red-50 border border-red-200"
-                        : "bg-orange-50 border border-orange-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium block truncate">{art.name}</span>
-                        <span className="text-xs text-muted-foreground">{getCategoryLabel(art.categoryId)}</span>
-                      </div>
-                    </div>
-                    <span className={`text-sm font-bold shrink-0 ml-2 ${
-                      art.stockQuantity === 0 ? "text-red-600" : "text-orange-600"
-                    }`}>
-                      {art.stockQuantity === 0 ? "Rupture" : `${art.stockQuantity} ${art.unit || ""}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <Link to="/stock">
-                <Button variant="ghost" size="sm" className="w-full mt-4 text-orange-600">
-                  Gérer le stock
-                </Button>
-              </Link>
-            </div>
-          )}
+          {/* (Stock alerts moved to top-level banner) */}
         </div>
       </div>
     </div>
