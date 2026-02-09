@@ -12,6 +12,7 @@ import {
   FileText,
   Heart,
   ClipboardList,
+  Zap,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -149,7 +150,7 @@ function AdminDashboard() {
                     className="p-6 hover:bg-gray-50 transition"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <Link
                           to={`/families/${need.familyId}`}
                           className="font-semibold text-foreground hover:text-primary transition"
@@ -166,9 +167,21 @@ function AdminDashboard() {
                           </p>
                         )}
                       </div>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                        {NEED_URGENCY_LABELS[need.urgency]}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          {NEED_URGENCY_LABELS[need.urgency]}
+                        </span>
+                        <Link to={`/aids?action=add&familyId=${need.familyId}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                          >
+                            <Gift className="w-3.5 h-3.5" />
+                            Répondre
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Créé{" "}
@@ -191,6 +204,14 @@ function AdminDashboard() {
               Gestion rapide
             </h3>
             <div className="space-y-3">
+              <Link to="/aids?action=add">
+                <Button
+                  className="w-full justify-start gap-2 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Zap className="w-4 h-4" />
+                  Enregistrer une aide
+                </Button>
+              </Link>
               <Link to="/families?action=add">
                 <Button
                   className="w-full justify-start gap-2"
@@ -198,6 +219,15 @@ function AdminDashboard() {
                 >
                   <Plus className="w-4 h-4" />
                   Nouvelle famille
+                </Button>
+              </Link>
+              <Link to="/needs?action=add">
+                <Button
+                  className="w-full justify-start gap-2"
+                  variant="outline"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  Signaler un besoin
                 </Button>
               </Link>
               <Link to="/reports">
@@ -393,14 +423,16 @@ function VolunteerDashboard() {
         ) : (
           <div className="divide-y divide-gray-100">
             {stats?.urgentNeedsList.map((need) => (
-              <Link
+              <div
                 key={need.id}
-                to={`/families/${need.familyId}`}
-                className="block p-5 hover:bg-gray-50 transition"
+                className="p-5 hover:bg-gray-50 transition"
               >
                 <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold text-foreground">
+                  <Link
+                    to={`/families/${need.familyId}`}
+                    className="flex-1 min-w-0"
+                  >
+                    <p className="font-semibold text-foreground hover:text-primary transition">
                       {need.familyName}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -412,15 +444,23 @@ function VolunteerDashboard() {
                         {need.comment}
                       </p>
                     )}
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
                       Urgent
                     </span>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    <Link to={`/aids?action=add&familyId=${need.familyId}`}>
+                      <Button
+                        size="sm"
+                        className="gap-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <Gift className="w-3.5 h-3.5" />
+                        Répondre
+                      </Button>
+                    </Link>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

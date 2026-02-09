@@ -134,6 +134,7 @@ export const AidSchema = z.object({
   volunteerName: z.string(),
   source: AidSource,
   notes: z.string().optional().default(""),
+  proofUrl: z.string().optional().default(""),
   createdAt: z.string(),
 });
 export type Aid = z.infer<typeof AidSchema>;
@@ -147,6 +148,7 @@ export const CreateAidSchema = z.object({
   volunteerName: z.string(),
   source: AidSource,
   notes: z.string().optional().default(""),
+  proofUrl: z.string().optional().default(""),
 });
 export type CreateAidInput = z.infer<typeof CreateAidSchema>;
 

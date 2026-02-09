@@ -525,6 +525,16 @@ export default function FamilyDetail() {
                           {aid.notes}
                         </p>
                       )}
+                      {aid.proofUrl && (
+                        <a
+                          href={aid.proofUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                        >
+                          📎 Voir la preuve
+                        </a>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -716,25 +726,93 @@ export default function FamilyDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Aid Dialog */}
+      {/* Add Aid Dialog — with pending needs context */}
       <Dialog open={showAddAid} onOpenChange={setShowAddAid}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Enregistrer une aide</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-green-600" />
+              Enregistrer une aide
+            </DialogTitle>
           </DialogHeader>
+
+          {/* Pending needs as clickable chips */}
+          {(() => {
+            const pendingNeeds = needs.filter((n) => n.status !== "covered");
+            if (pendingNeeds.length === 0) return null;
+            return (
+              <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                <p className="text-xs font-semibold text-orange-800 mb-2">
+                  Besoins en attente — cliquez pour pré-remplir le type :
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {pendingNeeds.map((need) => (
+                    <button
+                      key={need.id}
+                      type="button"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-white border border-orange-200 text-orange-800 hover:bg-orange-100 transition"
+                      onClick={() => {
+                        // Set the type dropdown value via a hidden approach
+                        const typeSelect = document.querySelector('select[name="aidType"]') as HTMLSelectElement;
+                        if (typeSelect) typeSelect.value = need.type;
+                        // Also set notes if details exist
+                        if (need.details) {
+                          const notesInput = document.querySelector('textarea[name="aidNotes"]') as HTMLTextAreaElement;
+                          if (notesInput) notesInput.value = need.details;
+                        }
+                      }}
+                    >
+                      {NEED_TYPE_LABELS[need.type]}
+                      {need.details && <span className="opacity-70">({need.details})</span>}
+                      <Badge
+                        variant={need.urgency === "high" ? "destructive" : "secondary"}
+                        className="text-[10px] px-1 py-0"
+                      >
+                        {NEED_URGENCY_LABELS[need.urgency]}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Recent aids — anti-redundancy */}
+          {aids.length > 0 && (
+            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <p className="text-xs font-semibold text-blue-800 mb-2">
+                Déjà donné récemment :
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {aids.slice(0, 5).map((aid) => (
+                  <span
+                    key={aid.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-700"
+                  >
+                    {NEED_TYPE_LABELS[aid.type]} x{aid.quantity}
+                    <span className="opacity-60">
+                      ({format(new Date(aid.date), "d MMM", { locale: fr })})
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               addAidMutation.mutate({
                 familyId: id!,
-                type: fd.get("type") as NeedType,
+                type: fd.get("aidType") as NeedType,
                 quantity: parseInt(fd.get("quantity") as string) || 1,
-                date: fd.get("date") as string,
+                date: new Date().toISOString(),
                 volunteerId: user?.id || "",
                 volunteerName: user?.name || "",
                 source: fd.get("source") as AidSource,
-                notes: fd.get("notes") as string,
+                notes: fd.get("aidNotes") as string,
+                proofUrl: fd.get("proofUrl") as string,
               });
             }}
             className="space-y-4"
@@ -743,7 +821,7 @@ export default function FamilyDetail() {
               <div className="space-y-2">
                 <Label>Type *</Label>
                 <select
-                  name="type"
+                  name="aidType"
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
                   required
                 >
@@ -769,30 +847,23 @@ export default function FamilyDetail() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Quantité *</Label>
-                <Input
-                  name="quantity"
-                  type="number"
-                  min={1}
-                  defaultValue={1}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Date *</Label>
-                <Input
-                  name="date"
-                  type="date"
-                  defaultValue={new Date().toISOString().split("T")[0]}
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Quantité *</Label>
+              <Input
+                name="quantity"
+                type="number"
+                min={1}
+                defaultValue={1}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label>Notes</Label>
-              <Textarea name="notes" rows={2} placeholder="Détails de l'aide..." />
+              <Textarea name="aidNotes" rows={2} placeholder="Détails de l'aide..." />
+            </div>
+            <div className="space-y-2">
+              <Label>Preuve (lien photo ou document)</Label>
+              <Input name="proofUrl" type="url" placeholder="https://..." />
             </div>
             <div className="flex justify-end gap-3">
               <Button
@@ -802,8 +873,13 @@ export default function FamilyDetail() {
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={addAidMutation.isPending}>
-                Enregistrer
+              <Button
+                type="submit"
+                disabled={addAidMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 gap-2"
+              >
+                <Gift className="w-4 h-4" />
+                {addAidMutation.isPending ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </div>
           </form>
