@@ -16,6 +16,7 @@ import FamilyDetail from "./pages/FamilyDetail";
 import Needs from "./pages/Needs";
 import Aids from "./pages/Aids";
 import Reports from "./pages/Reports";
+import Stock from "./pages/Stock";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -116,6 +117,14 @@ export default function App() {
                   <ProtectedRoute>
                     <Aids />
                   </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/stock"
+                element={
+                  <AdminRoute>
+                    <Stock />
+                  </AdminRoute>
                 }
               />
               <Route

@@ -12,6 +12,7 @@ import {
   User,
   Shield,
   ClipboardList,
+  Package,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const adminNavItems: NavItem[] = [
   { path: "/families", label: "Familles", icon: Users },
   { path: "/needs", label: "Besoins", icon: AlertTriangle },
   { path: "/aids", label: "Aides", icon: Gift },
+  { path: "/stock", label: "Stock", icon: Package },
   { path: "/reports", label: "Rapports", icon: FileBarChart },
 ];
 

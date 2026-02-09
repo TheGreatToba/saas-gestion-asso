@@ -332,7 +332,7 @@ function AdminDashboard() {
                   </div>
                 ))}
               </div>
-              <Link to="/aids">
+              <Link to="/stock">
                 <Button variant="ghost" size="sm" className="w-full mt-4 text-orange-600">
                   Gérer le stock
                 </Button>
