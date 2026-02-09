@@ -19,6 +19,20 @@ export const LoginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
 
+// ============ CATEGORY (dynamic aid/need types) ============
+
+export const CategorySchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Nom requis"),
+  createdAt: z.string(),
+});
+export type Category = z.infer<typeof CategorySchema>;
+
+export const CreateCategorySchema = z.object({
+  name: z.string().min(1, "Nom requis"),
+});
+export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+
 // ============ FAMILY ============
 
 export const FamilySituation = z.enum(["insured", "uninsured"]);
@@ -79,17 +93,6 @@ export type CreateChildInput = z.infer<typeof CreateChildSchema>;
 
 // ============ NEED ============
 
-export const NeedType = z.enum([
-  "food",
-  "diapers",
-  "clothes",
-  "blankets",
-  "mattress",
-  "medical",
-  "other",
-]);
-export type NeedType = z.infer<typeof NeedType>;
-
 export const NeedUrgency = z.enum(["low", "medium", "high"]);
 export type NeedUrgency = z.infer<typeof NeedUrgency>;
 
@@ -99,7 +102,7 @@ export type NeedStatus = z.infer<typeof NeedStatus>;
 export const NeedSchema = z.object({
   id: z.string(),
   familyId: z.string(),
-  type: NeedType,
+  type: z.string().min(1),
   urgency: NeedUrgency,
   status: NeedStatus,
   comment: z.string().optional().default(""),
@@ -111,7 +114,7 @@ export type Need = z.infer<typeof NeedSchema>;
 
 export const CreateNeedSchema = z.object({
   familyId: z.string(),
-  type: NeedType,
+  type: z.string().min(1),
   urgency: NeedUrgency,
   status: NeedStatus.optional().default("pending"),
   comment: z.string().optional().default(""),
@@ -127,7 +130,7 @@ export type AidSource = z.infer<typeof AidSource>;
 export const AidSchema = z.object({
   id: z.string(),
   familyId: z.string(),
-  type: NeedType,
+  type: z.string().min(1),
   quantity: z.number().min(1, "Quantité min 1"),
   date: z.string(),
   volunteerId: z.string(),
@@ -141,7 +144,7 @@ export type Aid = z.infer<typeof AidSchema>;
 
 export const CreateAidSchema = z.object({
   familyId: z.string(),
-  type: NeedType,
+  type: z.string().min(1),
   quantity: z.number().min(1, "Quantité min 1"),
   date: z.string(),
   volunteerId: z.string(),
@@ -186,16 +189,6 @@ export interface DashboardStats {
 }
 
 // ============ LABELS / TRANSLATIONS ============
-
-export const NEED_TYPE_LABELS: Record<NeedType, string> = {
-  food: "Nourriture",
-  diapers: "Couches",
-  clothes: "Vêtements",
-  blankets: "Couvertures",
-  mattress: "Matelas",
-  medical: "Consultation médicale",
-  other: "Autre",
-};
 
 export const NEED_URGENCY_LABELS: Record<NeedUrgency, string> = {
   low: "Faible",

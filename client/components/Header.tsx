@@ -28,7 +28,7 @@ const adminNavItems: NavItem[] = [
   { path: "/families", label: "Familles", icon: Users },
   { path: "/needs", label: "Besoins", icon: AlertTriangle },
   { path: "/aids", label: "Aides", icon: Gift },
-  { path: "/reports", label: "Rapports & Export", icon: FileBarChart },
+  { path: "/reports", label: "Rapports", icon: FileBarChart },
 ];
 
 const volunteerNavItems: NavItem[] = [

@@ -36,16 +36,15 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCategories } from "@/lib/useCategories";
 import {
   FAMILY_SITUATION_LABELS,
-  NEED_TYPE_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
   AID_SOURCE_LABELS,
   CHILD_SEX_LABELS,
 } from "@shared/schema";
 import type {
-  NeedType,
   NeedUrgency,
   AidSource,
   ChildSex,
@@ -58,6 +57,7 @@ import { fr } from "date-fns/locale";
 export default function FamilyDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, isAdmin } = useAuth();
+  const { categories, getCategoryLabel } = useCategories();
   const queryClient = useQueryClient();
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddNeed, setShowAddNeed] = useState(false);
@@ -192,14 +192,14 @@ export default function FamilyDetail() {
     ...aids.map((a) => ({
       type: "aid" as const,
       date: a.date,
-      title: `Aide : ${NEED_TYPE_LABELS[a.type]} (x${a.quantity})`,
+      title: `Aide : ${getCategoryLabel(a.type)} (x${a.quantity})`,
       subtitle: `Par ${a.volunteerName} — ${AID_SOURCE_LABELS[a.source]}`,
       notes: a.notes,
     })),
     ...needs.map((n) => ({
       type: "need" as const,
       date: n.createdAt,
-      title: `Besoin : ${NEED_TYPE_LABELS[n.type]}`,
+      title: `Besoin : ${getCategoryLabel(n.type)}`,
       subtitle: `Urgence : ${NEED_URGENCY_LABELS[n.urgency]} — ${NEED_STATUS_LABELS[n.status]}`,
       notes: n.comment,
     })),
@@ -426,7 +426,7 @@ export default function FamilyDetail() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium">
-                            {NEED_TYPE_LABELS[need.type]}
+                            {getCategoryLabel(need.type)}
                           </p>
                           <Badge
                             variant={
@@ -508,7 +508,7 @@ export default function FamilyDetail() {
                         <div className="flex items-center gap-2">
                           <Gift className="w-4 h-4 text-green-600" />
                           <p className="font-medium">
-                            {NEED_TYPE_LABELS[aid.type]} (x{aid.quantity})
+                            {getCategoryLabel(aid.type)} (x{aid.quantity})
                           </p>
                         </div>
                         <span className="text-xs text-muted-foreground">
@@ -664,7 +664,7 @@ export default function FamilyDetail() {
               const fd = new FormData(e.currentTarget);
               addNeedMutation.mutate({
                 familyId: id!,
-                type: fd.get("type") as NeedType,
+                type: fd.get("type") as string,
                 urgency: fd.get("urgency") as NeedUrgency,
                 details: fd.get("details") as string,
                 comment: fd.get("comment") as string,
@@ -680,9 +680,9 @@ export default function FamilyDetail() {
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
                   required
                 >
-                  {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
                     </option>
                   ))}
                 </select>
@@ -762,7 +762,7 @@ export default function FamilyDetail() {
                         }
                       }}
                     >
-                      {NEED_TYPE_LABELS[need.type]}
+                      {getCategoryLabel(need.type)}
                       {need.details && <span className="opacity-70">({need.details})</span>}
                       <Badge
                         variant={need.urgency === "high" ? "destructive" : "secondary"}
@@ -789,7 +789,7 @@ export default function FamilyDetail() {
                     key={aid.id}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-700"
                   >
-                    {NEED_TYPE_LABELS[aid.type]} x{aid.quantity}
+                    {getCategoryLabel(aid.type)} x{aid.quantity}
                     <span className="opacity-60">
                       ({format(new Date(aid.date), "d MMM", { locale: fr })})
                     </span>
@@ -805,7 +805,7 @@ export default function FamilyDetail() {
               const fd = new FormData(e.currentTarget);
               addAidMutation.mutate({
                 familyId: id!,
-                type: fd.get("aidType") as NeedType,
+                type: fd.get("aidType") as string,
                 quantity: parseInt(fd.get("quantity") as string) || 1,
                 date: new Date().toISOString(),
                 volunteerId: user?.id || "",
@@ -825,9 +825,9 @@ export default function FamilyDetail() {
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
                   required
                 >
-                  {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
                     </option>
                   ))}
                 </select>
