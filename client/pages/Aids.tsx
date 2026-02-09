@@ -13,13 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Plus,
   Search,
   Gift,
   Calendar,
@@ -30,12 +23,6 @@ import {
   CheckCircle2,
   Package,
   X,
-  Edit,
-  Trash2,
-  PackagePlus,
-  RotateCcw,
-  TrendingDown,
-  Layers,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -45,9 +32,8 @@ import { useCategories } from "@/lib/useCategories";
 import {
   AID_SOURCE_LABELS,
   NEED_URGENCY_LABELS,
-  NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { AidSource, Need, Article } from "@shared/schema";
+import type { AidSource, Need } from "@shared/schema";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -62,7 +48,6 @@ export default function Aids() {
     getCategoryLabel,
     getArticlesForCategory,
     getArticleLabel,
-    lowStockArticles,
   } = useCategories();
 
   // ═══════ Quick-add state ═══════
@@ -80,28 +65,6 @@ export default function Aids() {
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");
   const [proofUrl, setProofUrl] = useState("");
-
-  // ═══════ Category/article management state (admin) ═══════
-  const [showCatSection, setShowCatSection] = useState(false);
-  const [showCatForm, setShowCatForm] = useState(false);
-  const [editingCat, setEditingCat] = useState<{ id: string; name: string; description?: string } | null>(null);
-  const [catName, setCatName] = useState("");
-  const [catDescription, setCatDescription] = useState("");
-
-  // Article form state
-  const [showArticleForm, setShowArticleForm] = useState(false);
-  const [articleFormCatId, setArticleFormCatId] = useState("");
-  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
-  const [artName, setArtName] = useState("");
-  const [artDescription, setArtDescription] = useState("");
-  const [artUnit, setArtUnit] = useState("unités");
-  const [artStockQuantity, setArtStockQuantity] = useState(0);
-  const [artStockMin, setArtStockMin] = useState(0);
-
-  // Restock state
-  const [showRestockDialog, setShowRestockDialog] = useState(false);
-  const [restockArticle, setRestockArticle] = useState<{ id: string; name: string; unit: string } | null>(null);
-  const [restockDelta, setRestockDelta] = useState(0);
 
   // ═══════ List filter state ═══════
   const [filterType, setFilterType] = useState<string>("all");
@@ -133,7 +96,6 @@ export default function Aids() {
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
   const selectedFamily = selectedFamilyId ? familyMap.get(selectedFamilyId) : null;
-
   const pendingNeeds = familyNeeds.filter((n) => n.status !== "covered");
 
   const thirtyDaysAgo = new Date();
@@ -156,19 +118,14 @@ export default function Aids() {
 
   // ═══════ Mutations ═══════
 
-  const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["aids-all"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["articles"] });
-    queryClient.invalidateQueries({ queryKey: ["categories"] });
-    queryClient.invalidateQueries({ queryKey: ["family-aids", selectedFamilyId] });
-    queryClient.invalidateQueries({ queryKey: ["family-needs", selectedFamilyId] });
-  };
-
   const createMutation = useMutation({
     mutationFn: api.createAid,
     onSuccess: () => {
-      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["aids-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+      queryClient.invalidateQueries({ queryKey: ["family-aids", selectedFamilyId] });
+      queryClient.invalidateQueries({ queryKey: ["family-needs", selectedFamilyId] });
       setSelectedType("");
       setSelectedArticleId("");
       setQuantity(1);
@@ -186,144 +143,7 @@ export default function Aids() {
     },
   });
 
-  // Category mutations
-  const createCatMutation = useMutation({
-    mutationFn: api.createCategory,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setShowCatForm(false);
-      resetCatForm();
-      toast({ title: "Catégorie créée" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const updateCatMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name: string; description?: string }) =>
-      api.updateCategory(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setEditingCat(null);
-      resetCatForm();
-      toast({ title: "Catégorie mise à jour" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const deleteCatMutation = useMutation({
-    mutationFn: api.deleteCategory,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["articles"] });
-      toast({ title: "Catégorie supprimée" });
-    },
-  });
-
-  // Article mutations
-  const createArticleMutation = useMutation({
-    mutationFn: api.createArticle,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["articles"] });
-      setShowArticleForm(false);
-      resetArticleForm();
-      toast({ title: "Article créé" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const updateArticleMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name: string; description?: string; unit?: string; stockQuantity?: number; stockMin?: number }) =>
-      api.updateArticle(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["articles"] });
-      setShowArticleForm(false);
-      setEditingArticle(null);
-      resetArticleForm();
-      toast({ title: "Article mis à jour" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const deleteArticleMutation = useMutation({
-    mutationFn: api.deleteArticle,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["articles"] });
-      toast({ title: "Article supprimé" });
-    },
-  });
-
-  const adjustStockMutation = useMutation({
-    mutationFn: ({ id, delta }: { id: string; delta: number }) =>
-      api.adjustArticleStock(id, delta),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["articles"] });
-      setShowRestockDialog(false);
-      setRestockArticle(null);
-      setRestockDelta(0);
-      toast({ title: "Stock mis à jour" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  // ═══════ Form helpers ═══════
-
-  const resetCatForm = () => {
-    setCatName("");
-    setCatDescription("");
-  };
-
-  const resetArticleForm = () => {
-    setArtName("");
-    setArtDescription("");
-    setArtUnit("unités");
-    setArtStockQuantity(0);
-    setArtStockMin(0);
-    setArticleFormCatId("");
-  };
-
-  const handleCatSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!catName.trim()) return;
-    if (editingCat) {
-      updateCatMutation.mutate({ id: editingCat.id, name: catName.trim(), description: catDescription.trim() });
-    } else {
-      createCatMutation.mutate({ name: catName.trim(), description: catDescription.trim() });
-    }
-  };
-
-  const handleArticleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!artName.trim()) return;
-    if (editingArticle) {
-      updateArticleMutation.mutate({
-        id: editingArticle.id,
-        name: artName.trim(),
-        description: artDescription.trim(),
-        unit: artUnit.trim() || "unités",
-        stockQuantity: artStockQuantity,
-        stockMin: artStockMin,
-      });
-    } else {
-      createArticleMutation.mutate({
-        categoryId: articleFormCatId,
-        name: artName.trim(),
-        description: artDescription.trim(),
-        unit: artUnit.trim() || "unités",
-        stockQuantity: artStockQuantity,
-        stockMin: artStockMin,
-      });
-    }
-  };
+  // ═══════ Helpers ═══════
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -376,28 +196,24 @@ export default function Aids() {
         !family?.neighborhood.toLowerCase().includes(q) &&
         !aid.volunteerName.toLowerCase().includes(q) &&
         !getCategoryLabel(aid.type).toLowerCase().includes(q)
-      ) {
-        return false;
-      }
+      ) return false;
     }
     return true;
   });
 
-  // Stats
   const thisMonth = new Date();
   thisMonth.setDate(1);
   thisMonth.setHours(0, 0, 0, 0);
   const aidsThisMonth = aids.filter((a) => new Date(a.date) >= thisMonth);
   const totalQuantityThisMonth = aidsThisMonth.reduce((sum, a) => sum + a.quantity, 0);
 
-  // Articles for the selected category in aid form
   const selectedCatArticles = selectedType ? getArticlesForCategory(selectedType) : [];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
@@ -405,8 +221,7 @@ export default function Aids() {
             <p className="text-muted-foreground mt-1">
               {isAdmin ? (
                 <>
-                  {aids.length} aide{aids.length !== 1 ? "s" : ""} enregistrée
-                  {aids.length !== 1 ? "s" : ""}
+                  {aids.length} aide{aids.length !== 1 ? "s" : ""} enregistrée{aids.length !== 1 ? "s" : ""}
                   {" — "}
                   <span className="text-green-600 font-medium">
                     {aidsThisMonth.length} ce mois ({totalQuantityThisMonth} unités)
@@ -418,358 +233,14 @@ export default function Aids() {
             </p>
           </div>
           <div className="flex gap-3">
-            {isAdmin && !showCatSection && (
-              <Button
-                onClick={() => setShowCatSection(true)}
-                className="gap-2 bg-blue-600 hover:bg-blue-700"
-                size="lg"
-              >
-                <PackagePlus className="w-5 h-5" />
-                Gérer le stock
-              </Button>
-            )}
             {!showQuickAdd && (
-              <Button
-                onClick={() => setShowQuickAdd(true)}
-                className="gap-2 bg-green-600 hover:bg-green-700"
-                size="lg"
-              >
+              <Button onClick={() => setShowQuickAdd(true)} className="gap-2 bg-green-600 hover:bg-green-700" size="lg">
                 <Zap className="w-5 h-5" />
                 Enregistrer une aide
               </Button>
             )}
           </div>
         </div>
-
-        {/* ═══════════ CATEGORY & ARTICLE STOCK MANAGEMENT (admin) ═══════════ */}
-        {isAdmin && showCatSection && (
-          <div className="bg-white rounded-xl border-2 border-blue-200 shadow-lg mb-8 overflow-hidden">
-            {/* Panel header */}
-            <div className="bg-blue-50 px-6 py-4 flex items-center justify-between border-b border-blue-200">
-              <div className="flex items-center gap-2 flex-wrap">
-                <PackagePlus className="w-5 h-5 text-blue-600" />
-                <h2 className="font-semibold text-blue-900">
-                  Stock & Catégories
-                </h2>
-                <Badge variant="secondary">
-                  {categories.length} catégorie{categories.length !== 1 ? "s" : ""}, {articles.length} article{articles.length !== 1 ? "s" : ""}
-                </Badge>
-                {lowStockArticles.length > 0 && (
-                  <Badge variant="destructive" className="gap-1">
-                    <TrendingDown className="w-3 h-3" />
-                    {lowStockArticles.length} alerte{lowStockArticles.length !== 1 ? "s" : ""}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => {
-                    setShowCatForm(true);
-                    setEditingCat(null);
-                    resetCatForm();
-                  }}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Catégorie
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setShowCatSection(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Category accordion */}
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Chaque catégorie contient des articles (variantes). Le stock est suivi par article et se décrémente automatiquement à chaque aide enregistrée.
-              </p>
-              {categories.map((cat) => {
-                const catArticles = getArticlesForCategory(cat.id);
-                const totalStock = catArticles.reduce((s, a) => s + a.stockQuantity, 0);
-                const hasLow = catArticles.some((a) => a.stockMin > 0 && a.stockQuantity <= a.stockMin);
-                return (
-                  <div
-                    key={cat.id}
-                    className={`rounded-lg border overflow-hidden ${hasLow ? "border-orange-300" : "border-gray-200"}`}
-                  >
-                    {/* Category header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Layers className="w-4 h-4 text-blue-600 shrink-0" />
-                        <div className="min-w-0">
-                          <span className="font-semibold text-sm">{cat.name}</span>
-                          {cat.description && (
-                            <span className="text-xs text-muted-foreground ml-2">{cat.description}</span>
-                          )}
-                        </div>
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          {catArticles.length} article{catArticles.length !== 1 ? "s" : ""} · {totalStock} en stock
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-xs text-blue-600"
-                          onClick={() => {
-                            setArticleFormCatId(cat.id);
-                            setEditingArticle(null);
-                            resetArticleForm();
-                            setShowArticleForm(true);
-                          }}
-                        >
-                          <Plus className="w-3 h-3" />
-                          Article
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => {
-                            setEditingCat({ id: cat.id, name: cat.name, description: cat.description });
-                            setCatName(cat.name);
-                            setCatDescription(cat.description || "");
-                            setShowCatForm(true);
-                          }}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                          onClick={() => {
-                            if (confirm(`Supprimer "${cat.name}" et tous ses articles ?`)) {
-                              deleteCatMutation.mutate(cat.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Articles list */}
-                    {catArticles.length > 0 ? (
-                      <div className="divide-y divide-gray-100">
-                        {catArticles.map((art) => {
-                          const isEmpty = art.stockMin > 0 && art.stockQuantity === 0;
-                          const isLow = art.stockMin > 0 && art.stockQuantity <= art.stockMin && !isEmpty;
-                          return (
-                            <div
-                              key={art.id}
-                              className={`flex items-center gap-3 px-4 py-2.5 ${isEmpty ? "bg-red-50" : isLow ? "bg-orange-50" : ""}`}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium truncate">{art.name}</span>
-                                  {art.description && (
-                                    <span className="text-xs text-muted-foreground truncate hidden sm:inline">{art.description}</span>
-                                  )}
-                                </div>
-                              </div>
-                              {/* Stock bar */}
-                              <div className="flex items-center gap-2 w-40 shrink-0">
-                                <div className="flex-1">
-                                  {art.stockMin > 0 && (
-                                    <div className="w-full bg-gray-200 rounded-full h-1.5 mb-0.5">
-                                      <div
-                                        className={`h-1.5 rounded-full transition-all ${
-                                          isEmpty ? "bg-red-500" : isLow ? "bg-orange-500" : "bg-green-500"
-                                        }`}
-                                        style={{ width: `${Math.min(100, (art.stockQuantity / (art.stockMin * 3)) * 100)}%` }}
-                                      />
-                                    </div>
-                                  )}
-                                  <span className={`text-xs font-semibold ${isEmpty ? "text-red-600" : isLow ? "text-orange-600" : "text-foreground"}`}>
-                                    {art.stockQuantity} {art.unit}
-                                    {art.stockMin > 0 && (
-                                      <span className="text-muted-foreground font-normal"> / min {art.stockMin}</span>
-                                    )}
-                                  </span>
-                                </div>
-                              </div>
-                              {/* Actions */}
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0"
-                                  title="Réapprovisionner"
-                                  onClick={() => {
-                                    setRestockArticle({ id: art.id, name: art.name, unit: art.unit || "unités" });
-                                    setRestockDelta(0);
-                                    setShowRestockDialog(true);
-                                  }}
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0"
-                                  onClick={() => {
-                                    setEditingArticle(art);
-                                    setArticleFormCatId(art.categoryId);
-                                    setArtName(art.name);
-                                    setArtDescription(art.description || "");
-                                    setArtUnit(art.unit || "unités");
-                                    setArtStockQuantity(art.stockQuantity);
-                                    setArtStockMin(art.stockMin);
-                                    setShowArticleForm(true);
-                                  }}
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                                  onClick={() => {
-                                    if (confirm(`Supprimer "${art.name}" ?`)) {
-                                      deleteArticleMutation.mutate(art.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-3 text-xs text-muted-foreground italic">
-                        Aucun article — ajoutez des variantes pour suivre le stock
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {categories.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <PackagePlus className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>Aucune catégorie. Créez votre première catégorie d'aide.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Category Create/Edit Dialog */}
-        <Dialog open={showCatForm} onOpenChange={() => { setShowCatForm(false); setEditingCat(null); resetCatForm(); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingCat ? "Modifier la catégorie" : "Nouvelle catégorie d'aide"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCatSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nom *</Label>
-                <Input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="Ex: Nourriture, Couches, Vêtements..." required autoFocus />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input value={catDescription} onChange={(e) => setCatDescription(e.target.value)} placeholder="Détails sur cette catégorie..." />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                La catégorie regroupe des articles (variantes). Le stock sera géré au niveau de chaque article.
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => { setShowCatForm(false); setEditingCat(null); resetCatForm(); }}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={createCatMutation.isPending || updateCatMutation.isPending}>
-                  {editingCat ? "Mettre à jour" : "Créer la catégorie"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Article Create/Edit Dialog */}
-        <Dialog open={showArticleForm} onOpenChange={() => { setShowArticleForm(false); setEditingArticle(null); resetArticleForm(); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingArticle ? "Modifier l'article" : `Nouvel article — ${getCategoryLabel(articleFormCatId)}`}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleArticleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nom *</Label>
-                <Input value={artName} onChange={(e) => setArtName(e.target.value)} placeholder="Ex: Pack 1kg, Taille 3, Couverture polaire..." required autoFocus />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input value={artDescription} onChange={(e) => setArtDescription(e.target.value)} placeholder="Détails sur cet article..." />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-2">
-                  <Label>Unité</Label>
-                  <Input value={artUnit} onChange={(e) => setArtUnit(e.target.value)} placeholder="unités" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Stock initial</Label>
-                  <Input type="number" min={0} value={artStockQuantity} onChange={(e) => setArtStockQuantity(parseInt(e.target.value) || 0)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Seuil alerte</Label>
-                  <Input type="number" min={0} value={artStockMin} onChange={(e) => setArtStockMin(parseInt(e.target.value) || 0)} />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Le seuil d'alerte déclenche un avertissement visuel quand le stock descend en dessous.
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => { setShowArticleForm(false); setEditingArticle(null); resetArticleForm(); }}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={createArticleMutation.isPending || updateArticleMutation.isPending}>
-                  {editingArticle ? "Mettre à jour" : "Créer l'article"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Restock Dialog */}
-        <Dialog open={showRestockDialog} onOpenChange={() => { setShowRestockDialog(false); setRestockArticle(null); setRestockDelta(0); }}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Réapprovisionner</DialogTitle>
-            </DialogHeader>
-            {restockArticle && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Ajouter du stock pour <span className="font-semibold text-foreground">{restockArticle.name}</span>
-                </p>
-                <div className="space-y-2">
-                  <Label>Quantité à ajouter ({restockArticle.unit})</Label>
-                  <Input type="number" min={1} value={restockDelta || ""} onChange={(e) => setRestockDelta(parseInt(e.target.value) || 0)} placeholder="Quantité reçue..." autoFocus />
-                </div>
-                <div className="flex justify-end gap-3">
-                  <Button type="button" variant="outline" onClick={() => { setShowRestockDialog(false); setRestockArticle(null); }}>
-                    Annuler
-                  </Button>
-                  <Button disabled={restockDelta <= 0 || adjustStockMutation.isPending} onClick={() => {
-                    if (restockArticle && restockDelta > 0) {
-                      adjustStockMutation.mutate({ id: restockArticle.id, delta: restockDelta });
-                    }
-                  }}>
-                    Ajouter au stock
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
 
         {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
         {showQuickAdd && (
@@ -798,7 +269,8 @@ export default function Aids() {
                     className="pl-10 h-12 text-base"
                   />
                   {selectedFamilyId && (
-                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedFamilyId(""); setFamilySearch(""); setSelectedType(""); setSelectedArticleId(""); setShowFamilyDropdown(true); }}>
+                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => { setSelectedFamilyId(""); setFamilySearch(""); setSelectedType(""); setSelectedArticleId(""); setShowFamilyDropdown(true); }}>
                       <X className="w-4 h-4" />
                     </button>
                   )}
@@ -854,6 +326,7 @@ export default function Aids() {
                       </div>
                     </div>
                   )}
+
                   {recentFamilyAids.length > 0 && (
                     <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                       <p className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
@@ -870,6 +343,7 @@ export default function Aids() {
                       </div>
                     </div>
                   )}
+
                   {pendingNeeds.length === 0 && recentFamilyAids.length === 0 && (
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 text-center">
                       <p className="text-sm text-muted-foreground">Aucun besoin en attente et aucune aide récente pour cette famille.</p>
@@ -878,7 +352,7 @@ export default function Aids() {
                 </div>
               )}
 
-              {/* Step 2: Type (category) + Article selection */}
+              {/* Step 2: Category + Article selection */}
               {selectedFamilyId && (
                 <>
                   <div className="mb-4">
@@ -890,15 +364,14 @@ export default function Aids() {
                     </Label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {categories.map((cat) => {
-                        const val = cat.id;
-                        const isRedundant = recentlyGivenTypes.has(val);
-                        const isSelected = selectedType === val;
-                        const catArts = getArticlesForCategory(val);
+                        const isRedundant = recentlyGivenTypes.has(cat.id);
+                        const isSelected = selectedType === cat.id;
+                        const catArts = getArticlesForCategory(cat.id);
                         const totalStock = catArts.reduce((s, a) => s + a.stockQuantity, 0);
                         const hasStock = catArts.length > 0;
                         return (
-                          <button key={val} type="button"
-                            onClick={() => { setSelectedType(val); setSelectedArticleId(""); }}
+                          <button key={cat.id} type="button"
+                            onClick={() => { setSelectedType(cat.id); setSelectedArticleId(""); }}
                             className={`relative px-3 py-3 rounded-lg text-sm font-medium border transition-all ${
                               isSelected
                                 ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
@@ -921,7 +394,7 @@ export default function Aids() {
                     </div>
                   </div>
 
-                  {/* Step 2b: Article selection (appears when category has articles) */}
+                  {/* Article selection */}
                   {selectedType && selectedCatArticles.length > 0 && (
                     <div className="mb-4">
                       <Label className="text-sm font-semibold mb-2 block">
@@ -981,7 +454,6 @@ export default function Aids() {
                     </div>
                   </div>
 
-                  {/* Optional Details */}
                   {showDetails && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
                       <div className="space-y-1">
@@ -1003,9 +475,7 @@ export default function Aids() {
                         <><Gift className="w-5 h-5" />Enregistrer l'aide</>
                       )}
                     </Button>
-                    <Button type="button" variant="ghost" onClick={resetQuickAdd} className="text-muted-foreground">
-                      Réinitialiser
-                    </Button>
+                    <Button type="button" variant="ghost" onClick={resetQuickAdd} className="text-muted-foreground">Réinitialiser</Button>
                     {selectedType && recentlyGivenTypes.has(selectedType) && (
                       <p className="text-xs text-blue-600 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
