@@ -298,10 +298,12 @@ export default function FamilyDetail() {
             <TabsTrigger value="children">
               Enfants ({children.length})
             </TabsTrigger>
-            <TabsTrigger value="needs">
+            <Link to={`/needs?familyId=${id}`} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
               Besoins ({needs.filter((n) => n.status !== "covered").length})
-            </TabsTrigger>
-            <TabsTrigger value="aids">Aides ({aids.length})</TabsTrigger>
+            </Link>
+            <Link to={`/aids?familyId=${id}`} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+              Aides ({aids.length})
+            </Link>
             <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
           </TabsList>
 

@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Package,
   X,
+  Users,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -200,6 +201,7 @@ export default function Aids() {
   // ═══════ Filters ═══════
 
   const filtered = aids.filter((aid) => {
+    if (preselectedFamily && aid.familyId !== preselectedFamily) return false;
     if (filterType !== "all" && aid.type !== filterType) return false;
     if (listSearch) {
       const family = familyMap.get(aid.familyId);
@@ -300,6 +302,24 @@ export default function Aids() {
             )}
           </div>
         </div>
+
+        {/* Family filter indicator */}
+        {preselectedFamily && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-blue-600 shrink-0" />
+              <p className="text-sm text-blue-800">
+                Filtre actif : aides de la famille{" "}
+                <strong>{familyMap.get(preselectedFamily)?.responsibleName || ""}</strong>
+              </p>
+            </div>
+            <Link to="/aids">
+              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-100">
+                Voir toutes les aides
+              </Button>
+            </Link>
+          </div>
+        )}
 
         {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
         {showQuickAdd && (
