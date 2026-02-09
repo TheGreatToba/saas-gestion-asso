@@ -18,10 +18,9 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCategories } from "@/lib/useCategories";
 import {
-  NEED_TYPE_LABELS,
   NEED_URGENCY_LABELS,
-  AID_SOURCE_LABELS,
 } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -30,6 +29,7 @@ import { fr } from "date-fns/locale";
 
 function AdminDashboard() {
   const { user } = useAuth();
+  const { getCategoryLabel } = useCategories();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
@@ -158,7 +158,7 @@ function AdminDashboard() {
                           {need.familyName}
                         </Link>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {NEED_TYPE_LABELS[need.type]}
+                          {getCategoryLabel(need.type)}
                           {need.details ? ` — ${need.details}` : ""}
                         </p>
                         {need.comment && (
@@ -267,7 +267,7 @@ function AdminDashboard() {
                       {aid.familyName}
                     </Link>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {NEED_TYPE_LABELS[aid.type]} — x{aid.quantity}
+                      {getCategoryLabel(aid.type)} — x{aid.quantity}
                     </p>
                     <div className="flex justify-between mt-2">
                       <span className="text-xs text-muted-foreground">
@@ -304,6 +304,7 @@ function AdminDashboard() {
 
 function VolunteerDashboard() {
   const { user } = useAuth();
+  const { getCategoryLabel } = useCategories();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
@@ -436,7 +437,7 @@ function VolunteerDashboard() {
                       {need.familyName}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {NEED_TYPE_LABELS[need.type]}
+                      {getCategoryLabel(need.type)}
                       {need.details ? ` — ${need.details}` : ""}
                     </p>
                     {need.comment && (

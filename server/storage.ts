@@ -5,11 +5,13 @@ import type {
   Need,
   Aid,
   VisitNote,
+  Category,
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
   CreateAidInput,
   CreateVisitNoteInput,
+  CreateCategoryInput,
   DashboardStats,
 } from "../shared/schema";
 
@@ -35,12 +37,23 @@ class Storage {
   private needs: Need[] = [];
   private aids: Aid[] = [];
   private visitNotes: VisitNote[] = [];
+  private categories: Category[] = [];
 
   constructor() {
     this.seed();
   }
 
   private seed() {
+    // ---- Categories (dynamic aid/need types) ----
+    this.categories = [
+      { id: "food", name: "Nourriture", createdAt: daysAgo(365) },
+      { id: "diapers", name: "Couches", createdAt: daysAgo(365) },
+      { id: "clothes", name: "Vêtements", createdAt: daysAgo(365) },
+      { id: "blankets", name: "Couvertures", createdAt: daysAgo(365) },
+      { id: "mattress", name: "Matelas", createdAt: daysAgo(365) },
+      { id: "medical", name: "Consultation médicale", createdAt: daysAgo(365) },
+    ];
+
     // ---- Users ----
     const admin: User = {
       id: "usr-admin",
@@ -225,6 +238,63 @@ class Storage {
 
   getAllUsers(): User[] {
     return [...this.users];
+  }
+
+  // ==================== CATEGORIES ====================
+
+  getAllCategories(): Category[] {
+    return [...this.categories].sort(
+      (a, b) => a.name.localeCompare(b.name)
+    );
+  }
+
+  getCategory(id: string): Category | null {
+    return this.categories.find((c) => c.id === id) ?? null;
+  }
+
+  createCategory(input: CreateCategoryInput): Category {
+    // Generate slug from name
+    const slug = input.name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    const id = slug || "cat-" + generateId();
+    // Ensure unique id
+    const finalId = this.categories.find((c) => c.id === id)
+      ? id + "-" + generateId()
+      : id;
+    const category: Category = {
+      id: finalId,
+      name: input.name,
+      createdAt: now(),
+    };
+    this.categories.push(category);
+    return category;
+  }
+
+  updateCategory(id: string, input: Partial<CreateCategoryInput>): Category | null {
+    const idx = this.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return null;
+    this.categories[idx] = { ...this.categories[idx], ...input };
+    return this.categories[idx];
+  }
+
+  deleteCategory(id: string): boolean {
+    const idx = this.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    this.categories.splice(idx, 1);
+    return true;
+  }
+
+  // Helper: build category label map
+  getCategoryLabels(): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const cat of this.categories) {
+      map[cat.id] = cat.name;
+    }
+    return map;
   }
 
   // ==================== FAMILIES ====================

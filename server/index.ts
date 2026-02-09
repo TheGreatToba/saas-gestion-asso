@@ -15,6 +15,7 @@ import { handleGetNeeds, handleGetNeedsByFamily, handleCreateNeed, handleUpdateN
 import { handleGetAids, handleGetAidsByFamily, handleCreateAid } from "./routes/aids";
 import { handleGetNotes, handleCreateNote } from "./routes/notes";
 import { handleGetDashboardStats, handleGetExportData } from "./routes/dashboard";
+import { handleGetCategories, handleCreateCategory, handleUpdateCategory, handleDeleteCategory } from "./routes/categories";
 import { storage } from "./storage";
 
 // ---------- Auth Middleware ----------
@@ -68,6 +69,12 @@ export function createServer() {
 
   // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", handleLogin);
+
+  // Categories (public read, admin write)
+  app.get("/api/categories", handleGetCategories);
+  app.post("/api/categories", requireAuth, requireAdmin, handleCreateCategory);
+  app.put("/api/categories/:id", requireAuth, requireAdmin, handleUpdateCategory);
+  app.delete("/api/categories/:id", requireAuth, requireAdmin, handleDeleteCategory);
 
   // ----- Admin-only routes -----
   app.get("/api/users", requireAuth, requireAdmin, handleGetUsers);

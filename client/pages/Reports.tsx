@@ -15,8 +15,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCategories } from "@/lib/useCategories";
 import {
-  NEED_TYPE_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
   AID_SOURCE_LABELS,
@@ -27,6 +27,7 @@ import { fr } from "date-fns/locale";
 
 export default function Reports() {
   const { user } = useAuth();
+  const { categories, getCategoryLabel } = useCategories();
   const [exporting, setExporting] = useState(false);
 
   const { data: stats } = useQuery({
@@ -66,14 +67,14 @@ export default function Reports() {
         csv = "Famille,Type,Urgence,Statut,Détails,Commentaire,Date\n";
         needs.forEach((n) => {
           const family = families.find((f) => f.id === n.familyId);
-          csv += `"${family?.responsibleName || "Inconnu"}","${NEED_TYPE_LABELS[n.type]}","${NEED_URGENCY_LABELS[n.urgency]}","${NEED_STATUS_LABELS[n.status]}","${(n.details || "").replace(/"/g, '""')}","${(n.comment || "").replace(/"/g, '""')}","${format(new Date(n.createdAt), "dd/MM/yyyy")}"\n`;
+          csv += `"${family?.responsibleName || "Inconnu"}","${getCategoryLabel(n.type)}","${NEED_URGENCY_LABELS[n.urgency]}","${NEED_STATUS_LABELS[n.status]}","${(n.details || "").replace(/"/g, '""')}","${(n.comment || "").replace(/"/g, '""')}","${format(new Date(n.createdAt), "dd/MM/yyyy")}"\n`;
         });
         filename = "besoins.csv";
       } else {
         csv = "Famille,Type,Quantité,Source,Bénévole,Notes,Date\n";
         aids.forEach((a) => {
           const family = families.find((f) => f.id === a.familyId);
-          csv += `"${family?.responsibleName || "Inconnu"}","${NEED_TYPE_LABELS[a.type]}",${a.quantity},"${AID_SOURCE_LABELS[a.source]}","${a.volunteerName}","${(a.notes || "").replace(/"/g, '""')}","${format(new Date(a.date), "dd/MM/yyyy")}"\n`;
+          csv += `"${family?.responsibleName || "Inconnu"}","${getCategoryLabel(a.type)}",${a.quantity},"${AID_SOURCE_LABELS[a.source]}","${a.volunteerName}","${(a.notes || "").replace(/"/g, '""')}","${format(new Date(a.date), "dd/MM/yyyy")}"\n`;
         });
         filename = "aides.csv";
       }
@@ -98,9 +99,9 @@ export default function Reports() {
   };
 
   // Calculate need stats by type
-  const needsByType = Object.entries(NEED_TYPE_LABELS).map(([type, label]) => ({
-    type,
-    label,
+  const needsByType = categories.map((cat) => ({
+    type: cat.id,
+    label: cat.name,
     total: needs.filter((n) => n.type === type).length,
     pending: needs.filter((n) => n.type === type && n.status === "pending")
       .length,
@@ -110,11 +111,11 @@ export default function Reports() {
   }));
 
   // Calculate aid stats by type
-  const aidsByType = Object.entries(NEED_TYPE_LABELS).map(([type, label]) => {
-    const typeAids = aids.filter((a) => a.type === type);
+  const aidsByType = categories.map((cat) => {
+    const typeAids = aids.filter((a) => a.type === cat.id);
     return {
-      type,
-      label,
+      type: cat.id,
+      label: cat.name,
       count: typeAids.length,
       totalQuantity: typeAids.reduce((sum, a) => sum + a.quantity, 0),
     };
@@ -415,7 +416,7 @@ export default function Reports() {
                           {family?.neighborhood || "—"}
                         </td>
                         <td className="py-3">
-                          {NEED_TYPE_LABELS[need.type]}
+                          {getCategoryLabel(need.type)}
                         </td>
                         <td className="py-3 text-muted-foreground">
                           {need.details || "—"}

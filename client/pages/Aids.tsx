@@ -13,6 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Plus,
   Search,
   Gift,
@@ -24,18 +30,21 @@ import {
   CheckCircle2,
   Package,
   X,
+  Tags,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCategories } from "@/lib/useCategories";
 import {
-  NEED_TYPE_LABELS,
   AID_SOURCE_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { NeedType, AidSource, Need } from "@shared/schema";
+import type { AidSource, Need } from "@shared/schema";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -44,6 +53,7 @@ export default function Aids() {
   const [searchParams] = useSearchParams();
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const { categories, getCategoryLabel } = useCategories();
 
   // Quick-add state
   const preselectedFamily = searchParams.get("familyId") || "";
@@ -53,12 +63,18 @@ export default function Aids() {
   const [selectedFamilyId, setSelectedFamilyId] = useState(preselectedFamily);
   const [familySearch, setFamilySearch] = useState("");
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<NeedType | "">("");
+  const [selectedType, setSelectedType] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
   const [source, setSource] = useState<AidSource>("donation");
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");
   const [proofUrl, setProofUrl] = useState("");
+
+  // Category management state (admin)
+  const [showCatSection, setShowCatSection] = useState(false);
+  const [showCatForm, setShowCatForm] = useState(false);
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
+  const [catName, setCatName] = useState("");
 
   // List filter state
   const [filterType, setFilterType] = useState<string>("all");
@@ -141,7 +157,7 @@ export default function Aids() {
       toast({
         title: "Aide enregistrée !",
         description: `${selectedFamily?.responsibleName} — ${
-          selectedType ? NEED_TYPE_LABELS[selectedType] : ""
+          selectedType ? getCategoryLabel(selectedType) : ""
         }`,
       });
     },
@@ -154,12 +170,58 @@ export default function Aids() {
     },
   });
 
+  // Category mutations (admin)
+  const createCatMutation = useMutation({
+    mutationFn: api.createCategory,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setShowCatForm(false);
+      setCatName("");
+      toast({ title: "Catégorie créée" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateCatMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api.updateCategory(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setEditingCat(null);
+      setCatName("");
+      toast({ title: "Catégorie mise à jour" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteCatMutation = useMutation({
+    mutationFn: api.deleteCategory,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Catégorie supprimée" });
+    },
+  });
+
+  const handleCatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catName.trim()) return;
+    if (editingCat) {
+      updateCatMutation.mutate({ id: editingCat.id, name: catName.trim() });
+    } else {
+      createCatMutation.mutate({ name: catName.trim() });
+    }
+  };
+
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFamilyId || !selectedType) return;
     createMutation.mutate({
       familyId: selectedFamilyId,
-      type: selectedType as NeedType,
+      type: selectedType,
       quantity,
       date: new Date().toISOString(),
       volunteerId: user?.id || "",
@@ -200,7 +262,7 @@ export default function Aids() {
         !family?.responsibleName.toLowerCase().includes(q) &&
         !family?.neighborhood.toLowerCase().includes(q) &&
         !aid.volunteerName.toLowerCase().includes(q) &&
-        !NEED_TYPE_LABELS[aid.type].toLowerCase().includes(q)
+        !getCategoryLabel(aid.type).toLowerCase().includes(q)
       ) {
         return false;
       }
@@ -254,6 +316,140 @@ export default function Aids() {
             </Button>
           )}
         </div>
+
+        {/* ═══════════ CATEGORY MANAGEMENT (admin) ═══════════ */}
+        {isAdmin && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowCatSection(!showCatSection)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition mb-3"
+            >
+              <Tags className="w-4 h-4" />
+              <span className="font-medium">
+                Gérer les catégories d'aide ({categories.length})
+              </span>
+              {showCatSection ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+
+            {showCatSection && (
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 mb-2">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-muted-foreground">
+                    Ces catégories apparaissent dans les formulaires de besoins
+                    et d'aides.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 shrink-0 ml-4"
+                    onClick={() => {
+                      setShowCatForm(true);
+                      setEditingCat(null);
+                      setCatName("");
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nouvelle catégorie
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="inline-flex items-center gap-2 pl-3 pr-1 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                    >
+                      <span className="font-medium">{cat.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          setEditingCat(cat);
+                          setCatName(cat.name);
+                          setShowCatForm(true);
+                        }}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                        onClick={() => {
+                          if (
+                            confirm(`Supprimer "${cat.name}" ?`)
+                          ) {
+                            deleteCatMutation.mutate(cat.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Category Create/Edit Dialog */}
+            <Dialog
+              open={showCatForm}
+              onOpenChange={() => {
+                setShowCatForm(false);
+                setEditingCat(null);
+                setCatName("");
+              }}
+            >
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingCat
+                      ? "Modifier la catégorie"
+                      : "Nouvelle catégorie"}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCatSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Nom *</Label>
+                    <Input
+                      value={catName}
+                      onChange={(e) => setCatName(e.target.value)}
+                      placeholder="Ex: Produits d'hygiène, Fournitures scolaires..."
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCatForm(false);
+                        setEditingCat(null);
+                        setCatName("");
+                      }}
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={
+                        createCatMutation.isPending ||
+                        updateCatMutation.isPending
+                      }
+                    >
+                      {editingCat ? "Mettre à jour" : "Créer"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
 
         {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
         {showQuickAdd && (
@@ -394,7 +590,7 @@ export default function Aids() {
                             {selectedType === need.type && (
                               <CheckCircle2 className="w-3.5 h-3.5" />
                             )}
-                            {NEED_TYPE_LABELS[need.type]}
+                            {getCategoryLabel(need.type)}
                             {need.details && (
                               <span className="text-xs opacity-75">
                                 ({need.details})
@@ -429,7 +625,7 @@ export default function Aids() {
                             key={aid.id}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs bg-blue-100 text-blue-700 border border-blue-200"
                           >
-                            {NEED_TYPE_LABELS[aid.type]} x{aid.quantity}
+                            {getCategoryLabel(aid.type)} x{aid.quantity}
                             <span className="opacity-60">
                               (
                               {formatDistanceToNow(new Date(aid.date), {
@@ -469,17 +665,17 @@ export default function Aids() {
                       )}
                     </Label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => {
-                        const isRedundant = recentlyGivenTypes.has(
-                          val as NeedType
-                        );
+                      {categories.map((cat) => {
+                        const val = cat.id;
+                        const label = cat.name;
+                        const isRedundant = recentlyGivenTypes.has(val);
                         const isSelected = selectedType === val;
                         return (
                           <button
                             key={val}
                             type="button"
                             onClick={() =>
-                              setSelectedType(val as NeedType)
+                              setSelectedType(val)
                             }
                             className={`relative px-3 py-3 rounded-lg text-sm font-medium border transition-all ${
                               isSelected
@@ -517,6 +713,7 @@ export default function Aids() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">Source</Label>
+
                       <Select
                         value={source}
                         onValueChange={(v) => setSource(v as AidSource)}
@@ -625,9 +822,11 @@ export default function Aids() {
         {/* ═══════════ STATS (admin) ═══════════ */}
         {isAdmin && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            {Object.entries(NEED_TYPE_LABELS)
+            {categories
               .slice(0, 4)
-              .map(([type, label]) => {
+              .map((cat) => {
+                const type = cat.id;
+                const label = cat.name;
                 const count = aidsThisMonth.filter(
                   (a) => a.type === type
                 ).length;
@@ -667,9 +866,9 @@ export default function Aids() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tout type</SelectItem>
-                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>
-                        {label}
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -726,7 +925,7 @@ export default function Aids() {
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <Gift className="w-4 h-4 text-green-600" />
                         <span className="font-semibold">
-                          {NEED_TYPE_LABELS[aid.type]}
+                          {getCategoryLabel(aid.type)}
                         </span>
                         <Badge variant="secondary">x{aid.quantity}</Badge>
                         <Badge variant="outline">
@@ -771,6 +970,8 @@ export default function Aids() {
               );
             })}
           </div>
+        )}
+
         )}
       </div>
     </div>

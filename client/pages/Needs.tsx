@@ -28,12 +28,12 @@ import {
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useCategories } from "@/lib/useCategories";
 import {
-  NEED_TYPE_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { NeedType, NeedUrgency, NeedStatus, Need, Family } from "@shared/schema";
+import type { NeedUrgency, NeedStatus, Need, Family } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -41,6 +41,7 @@ import { fr } from "date-fns/locale";
 
 export default function Needs() {
   const { isAdmin } = useAuth();
+  const { categories, getCategoryLabel } = useCategories();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
@@ -112,7 +113,7 @@ export default function Needs() {
       if (
         !family?.responsibleName.toLowerCase().includes(searchLower) &&
         !family?.neighborhood.toLowerCase().includes(searchLower) &&
-        !NEED_TYPE_LABELS[need.type].toLowerCase().includes(searchLower) &&
+        !getCategoryLabel(need.type).toLowerCase().includes(searchLower) &&
         !(need.comment || "").toLowerCase().includes(searchLower)
       ) {
         return false;
@@ -212,9 +213,9 @@ export default function Needs() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tout type</SelectItem>
-                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>
-                        {label}
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -297,7 +298,7 @@ export default function Needs() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold">
-                          {NEED_TYPE_LABELS[need.type]}
+                          {getCategoryLabel(need.type)}
                         </span>
                         <Badge
                           variant={
@@ -400,7 +401,7 @@ export default function Needs() {
                 const fd = new FormData(e.currentTarget);
                 createMutation.mutate({
                   familyId: fd.get("familyId") as string,
-                  type: fd.get("type") as NeedType,
+                  type: fd.get("type") as string,
                   urgency: fd.get("urgency") as NeedUrgency,
                   details: fd.get("details") as string,
                   comment: fd.get("comment") as string,
@@ -431,9 +432,9 @@ export default function Needs() {
                     className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
                     required
                   >
-                    {Object.entries(NEED_TYPE_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>
-                        {label}
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
                       </option>
                     ))}
                   </select>

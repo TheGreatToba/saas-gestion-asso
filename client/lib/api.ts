@@ -6,11 +6,13 @@ import type {
   VisitNote,
   DashboardStats,
   User,
+  Category,
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
   CreateAidInput,
   CreateVisitNoteInput,
+  CreateCategoryInput,
 } from "@shared/schema";
 
 function getStoredUserId(): string | undefined {
@@ -46,6 +48,26 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 // ==================== Dashboard ====================
 
 export const api = {
+  // Categories
+  getCategories: () => fetchJson<Category[]>("/api/categories"),
+
+  createCategory: (data: CreateCategoryInput) =>
+    fetchJson<Category>("/api/categories", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateCategory: (id: string, data: Partial<CreateCategoryInput>) =>
+    fetchJson<Category>(`/api/categories/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteCategory: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/categories/${id}`, {
+      method: "DELETE",
+    }),
+
   // Dashboard
   getDashboardStats: () => fetchJson<DashboardStats>("/api/dashboard/stats"),
 
