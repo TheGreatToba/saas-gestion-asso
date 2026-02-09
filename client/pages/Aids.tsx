@@ -6,6 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -50,7 +56,7 @@ export default function Aids() {
 
   // ═══════ Quick-add state ═══════
   const preselectedFamily = searchParams.get("familyId") || "";
-  const [showQuickAdd, setShowQuickAdd] = useState(
+  const [showAddDialog, setShowAddDialog] = useState(
     searchParams.get("action") === "add" || !!preselectedFamily
   );
   const [selectedFamilyId, setSelectedFamilyId] = useState(preselectedFamily);
@@ -129,6 +135,7 @@ export default function Aids() {
       setNotes("");
       setProofUrl("");
       setShowDetails(false);
+      setShowAddDialog(false);
       toast({
         title: "Aide enregistrée !",
         description: `${selectedFamily?.responsibleName} — ${payloads.length} aide${payloads.length > 1 ? "s" : ""} ajoutée${payloads.length > 1 ? "s" : ""}`,
@@ -188,7 +195,8 @@ export default function Aids() {
     }
   };
 
-  const resetQuickAdd = () => {
+  const closeAddDialog = () => {
+    setShowAddDialog(false);
     setSelectedFamilyId("");
     setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
     setNotes("");
@@ -292,29 +300,23 @@ export default function Aids() {
             </p>
           </div>
           <div className="flex gap-3">
-            {!showQuickAdd && (
-              <Button onClick={() => setShowQuickAdd(true)} className="gap-2 bg-green-600 hover:bg-green-700" size="lg">
-                <Zap className="w-5 h-5" />
-                Enregistrer une aide
-              </Button>
-            )}
+            <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-green-600 hover:bg-green-700" size="lg">
+              <Zap className="w-5 h-5" />
+              Enregistrer une aide
+            </Button>
           </div>
         </div>
 
-        {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
-        {showQuickAdd && (
-          <div className="bg-white rounded-xl border-2 border-green-200 shadow-lg mb-8 overflow-hidden">
-            <div className="bg-green-50 px-6 py-4 flex items-center justify-between border-b border-green-200">
-              <div className="flex items-center gap-2">
+        {/* ═══════════ ADD AID DIALOG ═══════════ */}
+        <Dialog open={showAddDialog} onOpenChange={(open) => (open ? setShowAddDialog(true) : closeAddDialog())}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-green-600" />
-                <h2 className="text-lg font-bold text-green-800">Enregistrement rapide</h2>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => { setShowQuickAdd(false); resetQuickAdd(); }} className="text-green-700 hover:text-green-900">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <form onSubmit={handleQuickSubmit} className="p-6">
+                Enregistrer une aide
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleQuickSubmit} className="space-y-6 pt-2">
               {/* Step 1: Select Family */}
               <div className="mb-6">
                 <Label className="text-base font-semibold mb-2 block">1. Choisir la famille</Label>
@@ -600,14 +602,19 @@ export default function Aids() {
                   )}
 
                   {/* Submit */}
-                  <div className="flex flex-col sm:flex-row gap-3 items-center">
+                  <div className="flex flex-col sm:flex-row gap-3 items-center flex-wrap">
                     <Button type="submit" size="lg" disabled={!canSubmit || createMutation.isPending}
                       className="w-full sm:w-auto bg-green-600 hover:bg-green-700 gap-2 h-12 px-8 text-base">
                       {createMutation.isPending ? "Enregistrement..." : (
                         <><Gift className="w-5 h-5" />Enregistrer l'aide</>
                       )}
                     </Button>
-                    <Button type="button" variant="ghost" onClick={resetQuickAdd} className="text-muted-foreground">Réinitialiser</Button>
+                    <Button type="button" variant="outline" onClick={closeAddDialog}>
+                      Annuler
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => { setSelectedFamilyId(""); setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]); setNotes(""); setProofUrl(""); setShowDetails(false); setFamilySearch(""); }} className="text-muted-foreground">
+                      Réinitialiser
+                    </Button>
                     {redundantSelected.length > 0 && (
                       <p className="text-xs text-blue-600 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
@@ -620,8 +627,8 @@ export default function Aids() {
                 </>
               )}
             </form>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
         {/* ═══════════ STATS (admin) ═══════════ */}
         {isAdmin && (
