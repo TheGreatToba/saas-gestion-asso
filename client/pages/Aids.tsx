@@ -33,7 +33,7 @@ import {
   AID_SOURCE_LABELS,
   NEED_STATUS_LABELS,
 } from "@shared/schema";
-import type { AidSource, EnrichedNeed } from "@shared/schema";
+import type { AidSource, EnrichedNeed, CreateAidInput } from "@shared/schema";
 import { statusBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
@@ -59,9 +59,9 @@ export default function Aids() {
   const [selectedFamilyId, setSelectedFamilyId] = useState(preselectedFamily);
   const [familySearch, setFamilySearch] = useState("");
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<string>("");
-  const [selectedArticleId, setSelectedArticleId] = useState<string>("");
-  const [quantity, setQuantity] = useState(1);
+  const [aidItems, setAidItems] = useState<
+    { id: string; categoryId: string; articleId: string; quantity: number }[]
+  >([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
   const [source, setSource] = useState<AidSource>("donation");
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");
@@ -120,23 +120,23 @@ export default function Aids() {
   // ═══════ Mutations ═══════
 
   const createMutation = useMutation({
-    mutationFn: api.createAid,
-    onSuccess: () => {
+    mutationFn: async (payloads: CreateAidInput[]) => {
+      return Promise.all(payloads.map((payload) => api.createAid(payload)));
+    },
+    onSuccess: (_data, payloads) => {
       queryClient.invalidateQueries({ queryKey: ["aids-all"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       queryClient.invalidateQueries({ queryKey: ["family-aids", selectedFamilyId] });
       queryClient.invalidateQueries({ queryKey: ["family-needs", selectedFamilyId] });
-      setSelectedType("");
-      setSelectedArticleId("");
-      setQuantity(1);
+      setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
       setSource("donation");
       setNotes("");
       setProofUrl("");
       setShowDetails(false);
       toast({
         title: "Aide enregistrée !",
-        description: `${selectedFamily?.responsibleName} — ${selectedArticleId ? getArticleLabel(selectedArticleId) : getCategoryLabel(selectedType)}`,
+        description: `${selectedFamily?.responsibleName} — ${payloads.length} aide${payloads.length > 1 ? "s" : ""} ajoutée${payloads.length > 1 ? "s" : ""}`,
       });
     },
     onError: (err: Error) => {
@@ -148,24 +148,45 @@ export default function Aids() {
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFamilyId || !selectedType) return;
-    createMutation.mutate({
-      familyId: selectedFamilyId,
-      type: selectedType,
-      articleId: selectedArticleId || "",
-      quantity,
-      date: new Date().toISOString(),
-      volunteerId: user?.id || "",
-      volunteerName: user?.name || "",
-      source,
-      notes,
-      proofUrl,
-    });
+    if (!selectedFamilyId || !canSubmit) return;
+    const payloads: CreateAidInput[] = aidItems
+      .filter((item) => item.categoryId)
+      .map((item) => ({
+        familyId: selectedFamilyId,
+        type: item.categoryId,
+        articleId: item.articleId || "",
+        quantity: item.quantity,
+        date: new Date().toISOString(),
+        volunteerId: user?.id || "",
+        volunteerName: user?.name || "",
+        source,
+        notes,
+        proofUrl,
+      }));
+    if (payloads.length === 0) return;
+    createMutation.mutate(payloads);
   };
 
   const selectNeedAsType = (need: EnrichedNeed) => {
-    setSelectedType(need.type);
-    setSelectedArticleId("");
+    setAidItems((prev) => {
+      const emptyIndex = prev.findIndex((item) => !item.categoryId);
+      if (emptyIndex === -1) {
+        return [
+          ...prev,
+          {
+            id: `item-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            categoryId: need.type,
+            articleId: "",
+            quantity: 1,
+          },
+        ];
+      }
+      return prev.map((item, idx) =>
+        idx === emptyIndex
+          ? { ...item, categoryId: need.type, articleId: "" }
+          : item
+      );
+    });
     if (need.details) {
       setNotes(need.details);
       setShowDetails(true);
@@ -174,9 +195,7 @@ export default function Aids() {
 
   const resetQuickAdd = () => {
     setSelectedFamilyId("");
-    setSelectedType("");
-    setSelectedArticleId("");
-    setQuantity(1);
+    setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
     setSource("donation");
     setNotes("");
     setProofUrl("");
@@ -208,7 +227,53 @@ export default function Aids() {
   const aidsThisMonth = aids.filter((a) => new Date(a.date) >= thisMonth);
   const totalQuantityThisMonth = aidsThisMonth.reduce((sum, a) => sum + a.quantity, 0);
 
-  const selectedCatArticles = selectedType ? getArticlesForCategory(selectedType) : [];
+  const updateAidItem = (
+    id: string,
+    patch: Partial<{ categoryId: string; articleId: string; quantity: number }>
+  ) => {
+    setAidItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    );
+  };
+
+  const addAidItem = () => {
+    setAidItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        categoryId: "",
+        articleId: "",
+        quantity: 1,
+      },
+    ]);
+  };
+
+  const removeAidItem = (id: string) => {
+    setAidItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev));
+  };
+
+  const isItemComplete = (item: {
+    categoryId: string;
+    articleId: string;
+    quantity: number;
+  }) => {
+    if (!item.categoryId) return false;
+    const articles = getArticlesForCategory(item.categoryId);
+    if (articles.length > 0 && !item.articleId) return false;
+    return item.quantity >= 1;
+  };
+
+  const canSubmit =
+    !!selectedFamilyId &&
+    aidItems.length > 0 &&
+    aidItems.every((item) => isItemComplete(item));
+
+  const selectedCategoryIds = aidItems
+    .map((item) => item.categoryId)
+    .filter((id) => id);
+  const redundantSelected = selectedCategoryIds.filter((id) =>
+    recentlyGivenTypes.has(id)
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -270,8 +335,18 @@ export default function Aids() {
                     className="pl-10 h-12 text-base"
                   />
                   {selectedFamilyId && (
-                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      onClick={() => { setSelectedFamilyId(""); setFamilySearch(""); setSelectedType(""); setSelectedArticleId(""); setShowFamilyDropdown(true); }}>
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setSelectedFamilyId("");
+                        setFamilySearch("");
+                        setAidItems([
+                          { id: "item-1", categoryId: "", articleId: "", quantity: 1 },
+                        ]);
+                        setShowFamilyDropdown(true);
+                      }}
+                    >
                       <X className="w-4 h-4" />
                     </button>
                   )}
@@ -313,21 +388,33 @@ export default function Aids() {
                         <span className="font-normal text-orange-600">— cliquez pour enregistrer</span>
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {pendingNeeds.map((need) => (
-                          <button key={need.id} type="button" onClick={() => selectNeedAsType(need)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
-                              selectedType === need.type
-                                ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
-                                : "bg-white border-orange-200 text-orange-800 hover:bg-orange-100"
-                            }`}>
-                            {selectedType === need.type && <CheckCircle2 className="w-3.5 h-3.5" />}
-                            {getCategoryLabel(need.type)}
-                            {need.details && <span className="text-xs opacity-75">({need.details})</span>}
-                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusBadgeClasses(need.status)}`}>
-                              {NEED_STATUS_LABELS[need.status]}
-                            </Badge>
-                          </button>
-                        ))}
+                  {pendingNeeds.map((need) => {
+                    const alreadySelected = selectedCategoryIds.includes(need.type);
+                    return (
+                      <button
+                        key={need.id}
+                        type="button"
+                        onClick={() => selectNeedAsType(need)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                          alreadySelected
+                            ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
+                            : "bg-white border-orange-200 text-orange-800 hover:bg-orange-100"
+                        }`}
+                      >
+                        {alreadySelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {getCategoryLabel(need.type)}
+                        {need.details && (
+                          <span className="text-xs opacity-75">({need.details})</span>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 ${statusBadgeClasses(need.status)}`}
+                        >
+                          {NEED_STATUS_LABELS[need.status]}
+                        </Badge>
+                      </button>
+                    );
+                  })}
                       </div>
                     </div>
                   )}
@@ -362,86 +449,123 @@ export default function Aids() {
                 <>
                   <div className="mb-4">
                     <Label className="text-base font-semibold mb-2 block">
-                      2. Catégorie d'aide
+                      2. Catégories d'aide
                       {pendingNeeds.length > 0 && (
                         <span className="text-sm font-normal text-muted-foreground ml-2">(ou sélectionnez un besoin ci-dessus)</span>
                       )}
                     </Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {categories.map((cat) => {
-                        const isRedundant = recentlyGivenTypes.has(cat.id);
-                        const isSelected = selectedType === cat.id;
-                        const catArts = getArticlesForCategory(cat.id);
-                        const totalStock = catArts.reduce((s, a) => s + a.stockQuantity, 0);
-                        const hasStock = catArts.length > 0;
+                    <div className="space-y-3">
+                      {aidItems.map((item, index) => {
+                        const articles = item.categoryId
+                          ? getArticlesForCategory(item.categoryId)
+                          : [];
+                        const needsArticle = articles.length > 0;
                         return (
-                          <button key={cat.id} type="button"
-                            onClick={() => { setSelectedType(cat.id); setSelectedArticleId(""); }}
-                            className={`relative px-3 py-3 rounded-lg text-sm font-medium border transition-all ${
-                              isSelected
-                                ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
-                                : isRedundant
-                                ? "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
-                                : "bg-white border-gray-200 text-foreground hover:bg-gray-50"
-                            }`}>
-                            {cat.name}
-                            {hasStock && (
-                              <span className={`block text-[10px] mt-0.5 ${totalStock === 0 ? "text-red-500 font-semibold" : "text-muted-foreground"}`}>
-                                {totalStock === 0 ? "Rupture" : `${totalStock} en stock`}
-                              </span>
-                            )}
-                            {isRedundant && !isSelected && (
-                              <span className="block text-[10px] text-blue-500 mt-0.5">Déjà donné</span>
-                            )}
-                          </button>
+                          <div
+                            key={item.id}
+                            className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end"
+                          >
+                            <div className="sm:col-span-4 space-y-1">
+                              <Label className="text-sm">
+                                {index === 0 ? "Catégorie *" : "Catégorie"}
+                              </Label>
+                              <Select
+                                value={item.categoryId}
+                                onValueChange={(value) =>
+                                  updateAidItem(item.id, {
+                                    categoryId: value,
+                                    articleId: "",
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11">
+                                  <SelectValue placeholder="Choisir une catégorie" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map((cat) => (
+                                    <SelectItem key={cat.id} value={cat.id}>
+                                      {cat.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="sm:col-span-5 space-y-1">
+                              <Label className="text-sm">
+                                {needsArticle ? "Article *" : "Article"}
+                              </Label>
+                              <Select
+                                value={item.articleId}
+                                onValueChange={(value) =>
+                                  updateAidItem(item.id, { articleId: value })
+                                }
+                                disabled={!item.categoryId || articles.length === 0}
+                              >
+                                <SelectTrigger className="h-11">
+                                  <SelectValue
+                                    placeholder={
+                                      !item.categoryId
+                                        ? "Choisir une catégorie d'abord"
+                                        : articles.length === 0
+                                        ? "Aucun article pour cette catégorie"
+                                        : "Choisir un article"
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {articles.length === 0 && (
+                                    <SelectItem value="none" disabled>
+                                      Aucun article disponible
+                                    </SelectItem>
+                                  )}
+                                  {articles.map((art) => (
+                                    <SelectItem key={art.id} value={art.id}>
+                                      {art.name} — {art.stockQuantity} {art.unit}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="sm:col-span-2 space-y-1">
+                              <Label className="text-sm">Quantité *</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateAidItem(item.id, {
+                                    quantity: parseInt(e.target.value) || 1,
+                                  })
+                                }
+                                className="h-11"
+                              />
+                            </div>
+                            <div className="sm:col-span-1 flex sm:justify-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeAidItem(item.id)}
+                                className="text-muted-foreground"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
                         );
                       })}
+                      <div>
+                        <Button type="button" variant="outline" onClick={addAidItem}>
+                          Ajouter une catégorie
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Article selection */}
-                  {selectedType && selectedCatArticles.length > 0 && (
-                    <div className="mb-4">
-                      <Label className="text-sm font-semibold mb-2 block">
-                        Choisir l'article
-                        <span className="text-xs font-normal text-muted-foreground ml-2">(variante spécifique)</span>
-                      </Label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {selectedCatArticles.map((art) => {
-                          const isSelected = selectedArticleId === art.id;
-                          const isEmpty = art.stockMin > 0 && art.stockQuantity === 0;
-                          const isLow = art.stockMin > 0 && art.stockQuantity <= art.stockMin && !isEmpty;
-                          return (
-                            <button key={art.id} type="button"
-                              onClick={() => setSelectedArticleId(art.id)}
-                              className={`relative px-3 py-2.5 rounded-lg text-sm border transition-all text-left ${
-                                isSelected
-                                  ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
-                                  : isEmpty
-                                  ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
-                                  : "bg-white border-gray-200 text-foreground hover:bg-gray-50"
-                              }`}>
-                              <span className="font-medium block">{art.name}</span>
-                              <span className={`text-[10px] block mt-0.5 ${
-                                isEmpty ? "text-red-500 font-semibold" : isLow ? "text-orange-500" : "text-muted-foreground"
-                              }`}>
-                                {isEmpty ? "Rupture de stock" : `${art.stockQuantity} ${art.unit}`}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Step 3: Quantity + Source */}
+                  {/* Step 3: Source */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                     <div className="space-y-1">
-                      <Label className="text-sm">Quantité</Label>
-                      <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className="h-11" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-sm">Source</Label>
+                      <Label className="text-sm">Source *</Label>
                       <Select value={source} onValueChange={(v) => setSource(v as AidSource)}>
                         <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -451,7 +575,7 @@ export default function Aids() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-2 sm:col-span-1 flex items-end">
+                    <div className="col-span-2 sm:col-span-2 flex items-end">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setShowDetails(!showDetails)} className="text-muted-foreground gap-1">
                         {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         {showDetails ? "Masquer les détails" : "Détails optionnels"}
@@ -474,17 +598,19 @@ export default function Aids() {
 
                   {/* Submit */}
                   <div className="flex flex-col sm:flex-row gap-3 items-center">
-                    <Button type="submit" size="lg" disabled={!selectedType || createMutation.isPending}
+                    <Button type="submit" size="lg" disabled={!canSubmit || createMutation.isPending}
                       className="w-full sm:w-auto bg-green-600 hover:bg-green-700 gap-2 h-12 px-8 text-base">
                       {createMutation.isPending ? "Enregistrement..." : (
                         <><Gift className="w-5 h-5" />Enregistrer l'aide</>
                       )}
                     </Button>
                     <Button type="button" variant="ghost" onClick={resetQuickAdd} className="text-muted-foreground">Réinitialiser</Button>
-                    {selectedType && recentlyGivenTypes.has(selectedType) && (
+                    {redundantSelected.length > 0 && (
                       <p className="text-xs text-blue-600 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        Ce type d'aide a déjà été donné récemment à cette famille
+                        {redundantSelected.length > 1
+                          ? "Certaines catégories ont déjà été données récemment"
+                          : "Cette catégorie a déjà été donnée récemment"}
                       </p>
                     )}
                   </div>
