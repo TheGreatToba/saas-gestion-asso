@@ -248,6 +248,11 @@ export default function FamilyDetail() {
                 >
                   {FAMILY_HOUSING_LABELS[family.housing]}
                 </Badge>
+                {family.hasMedicalNeeds && (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                    Médical
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
@@ -268,10 +273,19 @@ export default function FamilyDetail() {
                   {family.childrenCount !== 1 ? "s" : ""}
                 </span>
               </div>
-              {family.notes && (
-                <p className="text-sm text-muted-foreground mt-3 bg-gray-50 p-3 rounded">
-                  {family.notes}
-                </p>
+              {(family.notes || family.healthNotes) && (
+                <div className="mt-3 space-y-2">
+                  {family.healthNotes && (
+                    <p className="text-sm text-red-800 bg-red-50 p-3 rounded border border-red-200">
+                      {family.healthNotes}
+                    </p>
+                  )}
+                  {family.notes && (
+                    <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded">
+                      {family.notes}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
