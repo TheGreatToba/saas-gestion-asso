@@ -107,6 +107,8 @@ class Storage {
         memberCount: 6,
         childrenCount: 4,
         housing: "not_housed",
+        healthNotes: "",
+        hasMedicalNeeds: false,
         notes: "Famille nombreuse, père au chômage depuis 6 mois",
         createdAt: daysAgo(90),
         updatedAt: daysAgo(2),
@@ -121,7 +123,9 @@ class Storage {
         memberCount: 4,
         childrenCount: 2,
         housing: "housed",
-        notes: "Mère malade, besoin de suivi régulier",
+        healthNotes: "Mère malade, besoin de suivi régulier",
+        hasMedicalNeeds: true,
+        notes: "",
         createdAt: daysAgo(60),
         updatedAt: daysAgo(5),
         lastVisitAt: daysAgo(5),
@@ -135,6 +139,8 @@ class Storage {
         memberCount: 3,
         childrenCount: 1,
         housing: "pending_placement",
+        healthNotes: "",
+        hasMedicalNeeds: false,
         notes: "Mère célibataire, très isolée — en attente de placement en foyer",
         createdAt: daysAgo(45),
         updatedAt: daysAgo(1),
@@ -149,6 +155,8 @@ class Storage {
         memberCount: 8,
         childrenCount: 5,
         housing: "not_housed",
+        healthNotes: "",
+        hasMedicalNeeds: false,
         notes: "Grand-parents à charge, logement insalubre",
         createdAt: daysAgo(120),
         updatedAt: daysAgo(35),
@@ -163,6 +171,8 @@ class Storage {
         memberCount: 5,
         childrenCount: 3,
         housing: "housed",
+        healthNotes: "",
+        hasMedicalNeeds: false,
         notes: "",
         createdAt: daysAgo(30),
         updatedAt: daysAgo(10),
@@ -177,7 +187,9 @@ class Storage {
         memberCount: 3,
         childrenCount: 1,
         housing: "not_housed",
-        notes: "Bébé prématuré, suivi médical nécessaire",
+        healthNotes: "Bébé prématuré, suivi médical nécessaire",
+        hasMedicalNeeds: true,
+        notes: "",
         createdAt: daysAgo(15),
         updatedAt: daysAgo(3),
         lastVisitAt: daysAgo(3),
@@ -601,6 +613,8 @@ class Storage {
       return new Date(f.lastVisitAt) < thirtyDaysAgo;
     }).length;
 
+    const medicalFamilies = this.families.filter((f) => f.hasMedicalNeeds).length;
+
     const recentAids = this.aids
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5)
@@ -623,6 +637,7 @@ class Storage {
       urgentNeeds,
       aidsThisMonth,
       familiesNotVisited,
+      medicalFamilies,
       recentAids,
       urgentNeedsList,
     };

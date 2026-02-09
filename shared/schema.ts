@@ -76,6 +76,8 @@ export const FamilySchema = z.object({
   memberCount: z.number().int().min(1, "Min 1 membre"),
   childrenCount: z.number().int().min(0),
   housing: FamilyHousing,
+  healthNotes: z.string().optional().default(""),
+  hasMedicalNeeds: z.boolean().optional().default(false),
   notes: z.string().optional().default(""),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -91,6 +93,8 @@ export const CreateFamilySchema = z.object({
   memberCount: z.number().int().min(1, "Min 1 membre"),
   childrenCount: z.number().int().min(0),
   housing: FamilyHousing,
+  healthNotes: z.string().optional().default(""),
+  hasMedicalNeeds: z.boolean().optional().default(false),
   notes: z.string().optional().default(""),
 });
 export type CreateFamilyInput = z.infer<typeof CreateFamilySchema>;
@@ -221,6 +225,7 @@ export interface DashboardStats {
   urgentNeeds: number;
   aidsThisMonth: number;
   familiesNotVisited: number;
+  medicalFamilies: number;
   recentAids: (Aid & { familyName: string })[];
   urgentNeedsList: (Need & { familyName: string })[];
 }

@@ -47,6 +47,8 @@ const emptyForm: CreateFamilyInput = {
   memberCount: 1,
   childrenCount: 0,
   housing: "not_housed",
+  healthNotes: "",
+  hasMedicalNeeds: false,
   notes: "",
 };
 
@@ -63,6 +65,11 @@ export default function Families() {
     queryKey: ["families", search],
     queryFn: () => api.getFamilies(search || undefined),
   });
+
+  const medicalFilter = searchParams.get("medical") === "1";
+  const visibleFamilies = medicalFilter
+    ? families.filter((f) => f.hasMedicalNeeds)
+    : families;
 
   const createMutation = useMutation({
     mutationFn: api.createFamily,
@@ -120,6 +127,8 @@ export default function Families() {
       memberCount: family.memberCount,
       childrenCount: family.childrenCount,
       housing: family.housing,
+      healthNotes: family.healthNotes || "",
+      hasMedicalNeeds: family.hasMedicalNeeds || false,
       notes: family.notes || "",
     });
   };
@@ -141,7 +150,7 @@ export default function Families() {
             <h1 className="text-3xl font-bold text-foreground">Familles</h1>
             <p className="text-muted-foreground mt-1">
               {isAdmin
-                ? `${families.length} famille${families.length !== 1 ? "s" : ""} enregistrée${families.length !== 1 ? "s" : ""}`
+                ? `${visibleFamilies.length} famille${visibleFamilies.length !== 1 ? "s" : ""} enregistrée${visibleFamilies.length !== 1 ? "s" : ""}`
                 : "Consultez et mettez à jour les informations des familles"}
             </p>
           </div>
@@ -162,6 +171,12 @@ export default function Families() {
           />
         </div>
 
+        {medicalFilter && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Filtre actif : familles avec besoins médicaux.
+          </div>
+        )}
+
         {/* List */}
         {isLoading ? (
           <div className="space-y-4">
@@ -172,7 +187,7 @@ export default function Families() {
               </div>
             ))}
           </div>
-        ) : families.length === 0 ? (
+        ) : visibleFamilies.length === 0 ? (
           <div className="text-center py-16">
             <Users className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground text-lg">
@@ -187,7 +202,7 @@ export default function Families() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {families.map((family) => (
+            {visibleFamilies.map((family) => (
               <div
                 key={family.id}
                 className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-6"
@@ -213,6 +228,11 @@ export default function Families() {
                       >
                         {FAMILY_HOUSING_LABELS[family.housing]}
                       </Badge>
+                      {family.hasMedicalNeeds && (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                          Médical
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -393,6 +413,25 @@ export default function Families() {
                   rows={3}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Maladies et spécificités</Label>
+                <Textarea
+                  value={form.healthNotes}
+                  onChange={(e) => setForm({ ...form, healthNotes: e.target.value })}
+                  placeholder="Ex: Handicapée besoin de dialyse, enfant autiste..."
+                  rows={3}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.hasMedicalNeeds}
+                  onChange={(e) =>
+                    setForm({ ...form, hasMedicalNeeds: e.target.checked })
+                  }
+                />
+                Cas médical à suivre en priorité
+              </label>
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={closeDialog}>
                   Annuler

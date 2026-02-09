@@ -74,6 +74,14 @@ function AdminDashboard() {
       iconColor: "text-yellow-600",
       link: "/families",
     },
+    {
+      label: "Cas médicaux",
+      value: stats?.medicalFamilies ?? 0,
+      icon: Heart,
+      color: "from-rose-50 to-rose-100",
+      iconColor: "text-rose-600",
+      link: "/families?medical=1",
+    },
   ];
 
   return (

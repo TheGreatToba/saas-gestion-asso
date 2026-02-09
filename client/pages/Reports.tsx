@@ -61,9 +61,9 @@ export default function Reports() {
 
       if (type === "families") {
         csv =
-          "Nom,Téléphone,Adresse,Quartier,Membres,Enfants,Hébergement,Notes,Dernière visite\n";
+          "Nom,Téléphone,Adresse,Quartier,Membres,Enfants,Hébergement,Maladies et spécificités,Cas médical,Notes,Dernière visite\n";
         families.forEach((f) => {
-          csv += `"${f.responsibleName}","${f.phone}","${f.address}","${f.neighborhood}",${f.memberCount},${f.childrenCount},"${FAMILY_HOUSING_LABELS[f.housing]}","${(f.notes || "").replace(/"/g, '""')}","${f.lastVisitAt ? format(new Date(f.lastVisitAt), "dd/MM/yyyy") : "Jamais"}"\n`;
+          csv += `"${f.responsibleName}","${f.phone}","${f.address}","${f.neighborhood}",${f.memberCount},${f.childrenCount},"${FAMILY_HOUSING_LABELS[f.housing]}","${(f.healthNotes || "").replace(/"/g, '""')}","${f.hasMedicalNeeds ? "Oui" : "Non"}","${(f.notes || "").replace(/"/g, '""')}","${f.lastVisitAt ? format(new Date(f.lastVisitAt), "dd/MM/yyyy") : "Jamais"}"\n`;
         });
         filename = "familles.csv";
       } else if (type === "needs") {

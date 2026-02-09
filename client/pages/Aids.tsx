@@ -29,10 +29,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
-import {
-  AID_SOURCE_LABELS,
-  NEED_STATUS_LABELS,
-} from "@shared/schema";
+import { NEED_STATUS_LABELS } from "@shared/schema";
 import type { AidSource, EnrichedNeed, CreateAidInput } from "@shared/schema";
 import { statusBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
@@ -62,14 +59,13 @@ export default function Aids() {
   const [aidItems, setAidItems] = useState<
     { id: string; categoryId: string; articleId: string; quantity: number }[]
   >([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
-  const [source, setSource] = useState<AidSource>("donation");
+  const source: AidSource = "donation";
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");
   const [proofUrl, setProofUrl] = useState("");
 
   // ═══════ List filter state ═══════
   const [filterType, setFilterType] = useState<string>("all");
-  const [filterSource, setFilterSource] = useState<string>("all");
   const [listSearch, setListSearch] = useState("");
 
   // ═══════ Data queries ═══════
@@ -130,7 +126,6 @@ export default function Aids() {
       queryClient.invalidateQueries({ queryKey: ["family-aids", selectedFamilyId] });
       queryClient.invalidateQueries({ queryKey: ["family-needs", selectedFamilyId] });
       setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
-      setSource("donation");
       setNotes("");
       setProofUrl("");
       setShowDetails(false);
@@ -196,7 +191,6 @@ export default function Aids() {
   const resetQuickAdd = () => {
     setSelectedFamilyId("");
     setAidItems([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
-    setSource("donation");
     setNotes("");
     setProofUrl("");
     setShowDetails(false);
@@ -207,7 +201,6 @@ export default function Aids() {
 
   const filtered = aids.filter((aid) => {
     if (filterType !== "all" && aid.type !== filterType) return false;
-    if (filterSource !== "all" && aid.source !== filterSource) return false;
     if (listSearch) {
       const family = familyMap.get(aid.familyId);
       const q = listSearch.toLowerCase();
@@ -562,25 +555,12 @@ export default function Aids() {
                     </div>
                   </div>
 
-                  {/* Step 3: Source */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-                    <div className="space-y-1">
-                      <Label className="text-sm">Source *</Label>
-                      <Select value={source} onValueChange={(v) => setSource(v as AidSource)}>
-                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(AID_SOURCE_LABELS).map(([val, label]) => (
-                            <SelectItem key={val} value={val}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2 sm:col-span-2 flex items-end">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowDetails(!showDetails)} className="text-muted-foreground gap-1">
-                        {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        {showDetails ? "Masquer les détails" : "Détails optionnels"}
-                      </Button>
-                    </div>
+                  {/* Step 3: Optional details */}
+                  <div className="mb-4">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowDetails(!showDetails)} className="text-muted-foreground gap-1">
+                      {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      {showDetails ? "Masquer les détails" : "Détails optionnels"}
+                    </Button>
                   </div>
 
                   {showDetails && (
@@ -590,8 +570,31 @@ export default function Aids() {
                         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Détails de l'aide..." />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-sm">Preuve (lien photo/document)</Label>
-                        <Input type="url" value={proofUrl} onChange={(e) => setProofUrl(e.target.value)} placeholder="https://..." />
+                        <Label className="text-sm">Preuve (image)</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.currentTarget.files?.[0];
+                            if (!file) {
+                              setProofUrl("");
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const result = typeof reader.result === "string" ? reader.result : "";
+                              setProofUrl(result);
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        {proofUrl.startsWith("data:image/") && (
+                          <img
+                            src={proofUrl}
+                            alt="Preuve"
+                            className="mt-2 h-24 w-auto rounded border border-gray-200"
+                          />
+                        )}
                       </div>
                     </div>
                   )}
@@ -654,15 +657,6 @@ export default function Aids() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={filterSource} onValueChange={setFilterSource}>
-                  <SelectTrigger className="w-36"><SelectValue placeholder="Source" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toute source</SelectItem>
-                    {Object.entries(AID_SOURCE_LABELS).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             )}
           </div>
@@ -698,7 +692,6 @@ export default function Aids() {
                           <span className="text-sm text-muted-foreground">› {articles.find((a) => a.id === aid.articleId)?.name || ""}</span>
                         )}
                         <Badge variant="secondary">x{aid.quantity}</Badge>
-                        <Badge variant="outline">{AID_SOURCE_LABELS[aid.source]}</Badge>
                       </div>
                       {family && (
                         <Link to={`/families/${family.id}`} className="text-sm text-primary hover:underline">
@@ -708,9 +701,22 @@ export default function Aids() {
                       <p className="text-sm text-muted-foreground mt-1">Par {aid.volunteerName}</p>
                       {aid.notes && <p className="text-xs text-muted-foreground mt-1">{aid.notes}</p>}
                       {aid.proofUrl && (
-                        <a href={aid.proofUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1">
-                          Voir la preuve
-                        </a>
+                        aid.proofUrl.startsWith("data:image/") ? (
+                          <img
+                            src={aid.proofUrl}
+                            alt="Preuve"
+                            className="mt-2 h-16 w-auto rounded border border-gray-200"
+                          />
+                        ) : (
+                          <a
+                            href={aid.proofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                          >
+                            Voir la preuve
+                          </a>
+                        )
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
