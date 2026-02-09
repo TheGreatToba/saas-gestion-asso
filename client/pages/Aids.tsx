@@ -971,8 +971,6 @@ export default function Aids() {
             })}
           </div>
         )}
-
-        )}
       </div>
     </div>
   );
