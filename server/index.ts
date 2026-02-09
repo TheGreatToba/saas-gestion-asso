@@ -15,7 +15,8 @@ import { handleGetNeeds, handleGetNeedsByFamily, handleCreateNeed, handleUpdateN
 import { handleGetAids, handleGetAidsByFamily, handleCreateAid } from "./routes/aids";
 import { handleGetNotes, handleCreateNote } from "./routes/notes";
 import { handleGetDashboardStats, handleGetExportData } from "./routes/dashboard";
-import { handleGetCategories, handleCreateCategory, handleUpdateCategory, handleDeleteCategory, handleAdjustStock } from "./routes/categories";
+import { handleGetCategories, handleCreateCategory, handleUpdateCategory, handleDeleteCategory } from "./routes/categories";
+import { handleGetAllArticles, handleGetArticlesByCategory, handleCreateArticle, handleUpdateArticle, handleDeleteArticle, handleAdjustArticleStock } from "./routes/articles";
 import { storage } from "./storage";
 
 // ---------- Auth Middleware ----------
@@ -80,7 +81,14 @@ export function createServer() {
   app.post("/api/categories", requireAuth, requireAdmin, handleCreateCategory);
   app.put("/api/categories/:id", requireAuth, requireAdmin, handleUpdateCategory);
   app.delete("/api/categories/:id", requireAuth, requireAdmin, handleDeleteCategory);
-  app.patch("/api/categories/:id/stock", requireAuth, requireAdmin, handleAdjustStock);
+
+  // Articles (public read, admin write)
+  app.get("/api/articles", handleGetAllArticles);
+  app.get("/api/categories/:categoryId/articles", handleGetArticlesByCategory);
+  app.post("/api/articles", requireAuth, requireAdmin, handleCreateArticle);
+  app.put("/api/articles/:id", requireAuth, requireAdmin, handleUpdateArticle);
+  app.delete("/api/articles/:id", requireAuth, requireAdmin, handleDeleteArticle);
+  app.patch("/api/articles/:id/stock", requireAuth, requireAdmin, handleAdjustArticleStock);
 
   // ----- Admin-only routes -----
   app.get("/api/users", requireAuth, requireAdmin, handleGetUsers);

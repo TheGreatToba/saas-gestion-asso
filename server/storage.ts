@@ -6,12 +6,14 @@ import type {
   Aid,
   VisitNote,
   Category,
+  Article,
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
   CreateAidInput,
   CreateVisitNoteInput,
   CreateCategoryInput,
+  CreateArticleInput,
   DashboardStats,
 } from "../shared/schema";
 
@@ -38,20 +40,36 @@ class Storage {
   private aids: Aid[] = [];
   private visitNotes: VisitNote[] = [];
   private categories: Category[] = [];
+  private articles: Article[] = [];
 
   constructor() {
     this.seed();
   }
 
   private seed() {
-    // ---- Categories (dynamic aid/need types with stock) ----
+    // ---- Categories (groupings) ----
     this.categories = [
-      { id: "food", name: "Nourriture", description: "Colis alimentaires, denrées", unit: "colis", stockQuantity: 24, stockMin: 5, createdAt: daysAgo(365) },
-      { id: "diapers", name: "Couches", description: "Couches bébé toutes tailles", unit: "paquets", stockQuantity: 15, stockMin: 5, createdAt: daysAgo(365) },
-      { id: "clothes", name: "Vêtements", description: "Vêtements enfants et adultes", unit: "pièces", stockQuantity: 42, stockMin: 10, createdAt: daysAgo(365) },
-      { id: "blankets", name: "Couvertures", description: "Couvertures et draps", unit: "pièces", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
-      { id: "mattress", name: "Matelas", description: "Matelas simple et double", unit: "pièces", stockQuantity: 3, stockMin: 2, createdAt: daysAgo(365) },
-      { id: "medical", name: "Consultation médicale", description: "Consultations et soins", unit: "consultations", stockQuantity: 0, stockMin: 0, createdAt: daysAgo(365) },
+      { id: "food", name: "Nourriture", description: "Colis alimentaires, denrées", createdAt: daysAgo(365) },
+      { id: "diapers", name: "Couches", description: "Couches bébé toutes tailles", createdAt: daysAgo(365) },
+      { id: "clothes", name: "Vêtements", description: "Vêtements enfants et adultes", createdAt: daysAgo(365) },
+      { id: "blankets", name: "Couvertures", description: "Couvertures et draps", createdAt: daysAgo(365) },
+      { id: "mattress", name: "Matelas", description: "Matelas simple et double", createdAt: daysAgo(365) },
+      { id: "medical", name: "Consultation médicale", description: "Consultations et soins", createdAt: daysAgo(365) },
+    ];
+
+    // ---- Articles (stock variants within categories) ----
+    this.articles = [
+      { id: "art-food-colis", categoryId: "food", name: "Colis alimentaire standard", description: "Riz, huile, sucre, farine, conserves", unit: "colis", stockQuantity: 18, stockMin: 5, createdAt: daysAgo(365) },
+      { id: "art-food-farine1", categoryId: "food", name: "Farine 1kg", description: "Pack de farine de 1kg", unit: "paquets", stockQuantity: 30, stockMin: 10, createdAt: daysAgo(60) },
+      { id: "art-food-farine2", categoryId: "food", name: "Farine 2kg", description: "Pack de farine de 2kg", unit: "paquets", stockQuantity: 12, stockMin: 5, createdAt: daysAgo(30) },
+      { id: "art-diaper-t1", categoryId: "diapers", name: "Couches taille 1", description: "Nouveau-né", unit: "paquets", stockQuantity: 4, stockMin: 3, createdAt: daysAgo(365) },
+      { id: "art-diaper-t3", categoryId: "diapers", name: "Couches taille 3", description: "4-9 kg", unit: "paquets", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
+      { id: "art-diaper-t5", categoryId: "diapers", name: "Couches taille 5", description: "11-25 kg", unit: "paquets", stockQuantity: 3, stockMin: 3, createdAt: daysAgo(365) },
+      { id: "art-clothes-child", categoryId: "clothes", name: "Vêtements enfant", description: "Toutes tailles enfant", unit: "pièces", stockQuantity: 30, stockMin: 10, createdAt: daysAgo(365) },
+      { id: "art-clothes-adult", categoryId: "clothes", name: "Vêtements adulte", description: "Toutes tailles adulte", unit: "pièces", stockQuantity: 12, stockMin: 5, createdAt: daysAgo(365) },
+      { id: "art-blanket", categoryId: "blankets", name: "Couverture standard", description: "Couverture polaire", unit: "pièces", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
+      { id: "art-mattress-s", categoryId: "mattress", name: "Matelas 1 place", description: "", unit: "pièces", stockQuantity: 2, stockMin: 2, createdAt: daysAgo(365) },
+      { id: "art-mattress-d", categoryId: "mattress", name: "Matelas 2 places", description: "", unit: "pièces", stockQuantity: 1, stockMin: 1, createdAt: daysAgo(365) },
     ];
 
     // ---- Users ----
@@ -253,7 +271,6 @@ class Storage {
   }
 
   createCategory(input: CreateCategoryInput): Category {
-    // Generate slug from name
     const slug = input.name
       .toLowerCase()
       .normalize("NFD")
@@ -261,7 +278,6 @@ class Storage {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
     const id = slug || "cat-" + generateId();
-    // Ensure unique id
     const finalId = this.categories.find((c) => c.id === id)
       ? id + "-" + generateId()
       : id;
@@ -269,9 +285,6 @@ class Storage {
       id: finalId,
       name: input.name,
       description: input.description ?? "",
-      unit: input.unit ?? "unités",
-      stockQuantity: input.stockQuantity ?? 0,
-      stockMin: input.stockMin ?? 0,
       createdAt: now(),
     };
     this.categories.push(category);
@@ -289,16 +302,69 @@ class Storage {
     const idx = this.categories.findIndex((c) => c.id === id);
     if (idx === -1) return false;
     this.categories.splice(idx, 1);
+    // cascade delete articles of this category
+    this.articles = this.articles.filter((a) => a.categoryId !== id);
     return true;
   }
 
-  // Helper: build category label map
   getCategoryLabels(): Record<string, string> {
     const map: Record<string, string> = {};
     for (const cat of this.categories) {
       map[cat.id] = cat.name;
     }
     return map;
+  }
+
+  // ==================== ARTICLES (stock variants) ====================
+
+  getAllArticles(): Article[] {
+    return [...this.articles].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  getArticlesByCategory(categoryId: string): Article[] {
+    return this.articles
+      .filter((a) => a.categoryId === categoryId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  getArticle(id: string): Article | null {
+    return this.articles.find((a) => a.id === id) ?? null;
+  }
+
+  createArticle(input: CreateArticleInput): Article {
+    const article: Article = {
+      id: "art-" + generateId(),
+      categoryId: input.categoryId,
+      name: input.name,
+      description: input.description ?? "",
+      unit: input.unit ?? "unités",
+      stockQuantity: input.stockQuantity ?? 0,
+      stockMin: input.stockMin ?? 0,
+      createdAt: now(),
+    };
+    this.articles.push(article);
+    return article;
+  }
+
+  updateArticle(id: string, input: Partial<Omit<CreateArticleInput, "categoryId">>): Article | null {
+    const idx = this.articles.findIndex((a) => a.id === id);
+    if (idx === -1) return null;
+    this.articles[idx] = { ...this.articles[idx], ...input };
+    return this.articles[idx];
+  }
+
+  deleteArticle(id: string): boolean {
+    const idx = this.articles.findIndex((a) => a.id === id);
+    if (idx === -1) return false;
+    this.articles.splice(idx, 1);
+    return true;
+  }
+
+  adjustArticleStock(articleId: string, delta: number): Article | null {
+    const art = this.articles.find((a) => a.id === articleId);
+    if (!art) return null;
+    art.stockQuantity = Math.max(0, art.stockQuantity + delta);
+    return art;
   }
 
   // ==================== FAMILIES ====================
@@ -460,19 +526,14 @@ class Storage {
       family.lastVisitAt = input.date || now();
       family.updatedAt = now();
     }
-    // Decrement stock for the category
-    const cat = this.categories.find((c) => c.id === input.type);
-    if (cat && cat.stockQuantity > 0) {
-      cat.stockQuantity = Math.max(0, cat.stockQuantity - (input.quantity || 1));
+    // Decrement stock for the article (if specified)
+    if (input.articleId) {
+      const art = this.articles.find((a) => a.id === input.articleId);
+      if (art) {
+        art.stockQuantity = Math.max(0, art.stockQuantity - (input.quantity || 1));
+      }
     }
     return aid;
-  }
-
-  adjustCategoryStock(categoryId: string, delta: number): Category | null {
-    const cat = this.categories.find((c) => c.id === categoryId);
-    if (!cat) return null;
-    cat.stockQuantity = Math.max(0, cat.stockQuantity + delta);
-    return cat;
   }
 
   // ==================== VISIT NOTES ====================

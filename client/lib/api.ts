@@ -7,12 +7,14 @@ import type {
   DashboardStats,
   User,
   Category,
+  Article,
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
   CreateAidInput,
   CreateVisitNoteInput,
   CreateCategoryInput,
+  CreateArticleInput,
 } from "@shared/schema";
 
 function getStoredUserId(): string | undefined {
@@ -68,8 +70,31 @@ export const api = {
       method: "DELETE",
     }),
 
-  adjustCategoryStock: (id: string, delta: number) =>
-    fetchJson<Category>(`/api/categories/${id}/stock`, {
+  // Articles (stock variants)
+  getAllArticles: () => fetchJson<Article[]>("/api/articles"),
+
+  getArticlesByCategory: (categoryId: string) =>
+    fetchJson<Article[]>(`/api/categories/${categoryId}/articles`),
+
+  createArticle: (data: CreateArticleInput) =>
+    fetchJson<Article>("/api/articles", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateArticle: (id: string, data: Partial<Omit<CreateArticleInput, "categoryId">>) =>
+    fetchJson<Article>(`/api/articles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteArticle: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/articles/${id}`, {
+      method: "DELETE",
+    }),
+
+  adjustArticleStock: (id: string, delta: number) =>
+    fetchJson<Article>(`/api/articles/${id}/stock`, {
       method: "PATCH",
       body: JSON.stringify({ delta }),
     }),
