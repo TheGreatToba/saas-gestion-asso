@@ -298,12 +298,10 @@ export default function FamilyDetail() {
             <TabsTrigger value="children">
               Enfants ({children.length})
             </TabsTrigger>
-            <Link to={`/needs?familyId=${id}`} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+            <TabsTrigger value="needs">
               Besoins ({needs.filter((n) => n.status !== "covered").length})
-            </Link>
-            <Link to={`/aids?familyId=${id}`} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
-              Aides ({aids.length})
-            </Link>
+            </TabsTrigger>
+            <TabsTrigger value="aids">Aides ({aids.length})</TabsTrigger>
             <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
           </TabsList>
 
@@ -427,14 +425,12 @@ export default function FamilyDetail() {
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold">Besoins</h2>
-                <Button
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setShowAddNeed(true)}
-                >
-                  <Plus className="w-4 h-4" />
-                  Ajouter
-                </Button>
+                <Link to={`/needs?action=add&familyId=${id}`}>
+                  <Button size="sm" className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Ajouter
+                  </Button>
+                </Link>
               </div>
               {needs.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
@@ -510,14 +506,12 @@ export default function FamilyDetail() {
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold">Aides apportées</h2>
-                <Button
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setShowAddAid(true)}
-                >
-                  <Plus className="w-4 h-4" />
-                  Enregistrer
-                </Button>
+                <Link to={`/aids?action=add&familyId=${id}`}>
+                  <Button size="sm" className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Enregistrer
+                  </Button>
+                </Link>
               </div>
               {aids.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
