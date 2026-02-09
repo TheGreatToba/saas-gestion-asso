@@ -19,15 +19,12 @@ export const LoginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
 
-// ============ CATEGORY (dynamic aid/need types) ============
+// ============ CATEGORY (grouping for aid/need types) ============
 
 export const CategorySchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Nom requis"),
   description: z.string().optional().default(""),
-  unit: z.string().optional().default("unités"),
-  stockQuantity: z.number().int().min(0).default(0),
-  stockMin: z.number().int().min(0).default(0),
   createdAt: z.string(),
 });
 export type Category = z.infer<typeof CategorySchema>;
@@ -35,11 +32,32 @@ export type Category = z.infer<typeof CategorySchema>;
 export const CreateCategorySchema = z.object({
   name: z.string().min(1, "Nom requis"),
   description: z.string().optional().default(""),
+});
+export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+
+// ============ ARTICLE (stock variant within a category) ============
+
+export const ArticleSchema = z.object({
+  id: z.string(),
+  categoryId: z.string(),
+  name: z.string().min(1, "Nom requis"),
+  description: z.string().optional().default(""),
+  unit: z.string().optional().default("unités"),
+  stockQuantity: z.number().int().min(0).default(0),
+  stockMin: z.number().int().min(0).default(0),
+  createdAt: z.string(),
+});
+export type Article = z.infer<typeof ArticleSchema>;
+
+export const CreateArticleSchema = z.object({
+  categoryId: z.string(),
+  name: z.string().min(1, "Nom requis"),
+  description: z.string().optional().default(""),
   unit: z.string().optional().default("unités"),
   stockQuantity: z.number().int().min(0).optional().default(0),
   stockMin: z.number().int().min(0).optional().default(0),
 });
-export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+export type CreateArticleInput = z.infer<typeof CreateArticleSchema>;
 
 // ============ FAMILY ============
 
@@ -139,6 +157,7 @@ export const AidSchema = z.object({
   id: z.string(),
   familyId: z.string(),
   type: z.string().min(1),
+  articleId: z.string().optional().default(""),
   quantity: z.number().min(1, "Quantité min 1"),
   date: z.string(),
   volunteerId: z.string(),
@@ -153,6 +172,7 @@ export type Aid = z.infer<typeof AidSchema>;
 export const CreateAidSchema = z.object({
   familyId: z.string(),
   type: z.string().min(1),
+  articleId: z.string().optional().default(""),
   quantity: z.number().min(1, "Quantité min 1"),
   date: z.string(),
   volunteerId: z.string(),
