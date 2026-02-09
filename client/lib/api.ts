@@ -68,6 +68,12 @@ export const api = {
       method: "DELETE",
     }),
 
+  adjustCategoryStock: (id: string, delta: number) =>
+    fetchJson<Category>(`/api/categories/${id}/stock`, {
+      method: "PATCH",
+      body: JSON.stringify({ delta }),
+    }),
+
   // Dashboard
   getDashboardStats: () => fetchJson<DashboardStats>("/api/dashboard/stats"),
 

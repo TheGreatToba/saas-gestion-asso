@@ -24,12 +24,20 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export const CategorySchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Nom requis"),
+  description: z.string().optional().default(""),
+  unit: z.string().optional().default("unités"),
+  stockQuantity: z.number().int().min(0).default(0),
+  stockMin: z.number().int().min(0).default(0),
   createdAt: z.string(),
 });
 export type Category = z.infer<typeof CategorySchema>;
 
 export const CreateCategorySchema = z.object({
   name: z.string().min(1, "Nom requis"),
+  description: z.string().optional().default(""),
+  unit: z.string().optional().default("unités"),
+  stockQuantity: z.number().int().min(0).optional().default(0),
+  stockMin: z.number().int().min(0).optional().default(0),
 });
 export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
 

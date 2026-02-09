@@ -33,6 +33,9 @@ import {
   Tags,
   Edit,
   Trash2,
+  PackagePlus,
+  RotateCcw,
+  TrendingDown,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -73,8 +76,22 @@ export default function Aids() {
   // Category management state (admin)
   const [showCatSection, setShowCatSection] = useState(false);
   const [showCatForm, setShowCatForm] = useState(false);
-  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
+  const [editingCat, setEditingCat] = useState<{
+    id: string;
+    name: string;
+    description?: string;
+    unit?: string;
+    stockQuantity?: number;
+    stockMin?: number;
+  } | null>(null);
   const [catName, setCatName] = useState("");
+  const [catDescription, setCatDescription] = useState("");
+  const [catUnit, setCatUnit] = useState("unités");
+  const [catStockQuantity, setCatStockQuantity] = useState(0);
+  const [catStockMin, setCatStockMin] = useState(0);
+  const [showRestockDialog, setShowRestockDialog] = useState(false);
+  const [restockCat, setRestockCat] = useState<{ id: string; name: string; unit: string } | null>(null);
+  const [restockDelta, setRestockDelta] = useState(0);
 
   // List filter state
   const [filterType, setFilterType] = useState<string>("all");
@@ -141,6 +158,7 @@ export default function Aids() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["aids-all"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({
         queryKey: ["family-aids", selectedFamilyId],
       });
@@ -176,7 +194,7 @@ export default function Aids() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       setShowCatForm(false);
-      setCatName("");
+      resetCatForm();
       toast({ title: "Catégorie créée" });
     },
     onError: (err: Error) => {
@@ -185,13 +203,37 @@ export default function Aids() {
   });
 
   const updateCatMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api.updateCategory(id, { name }),
+    mutationFn: ({
+      id,
+      ...data
+    }: {
+      id: string;
+      name: string;
+      description?: string;
+      unit?: string;
+      stockQuantity?: number;
+      stockMin?: number;
+    }) => api.updateCategory(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       setEditingCat(null);
-      setCatName("");
+      resetCatForm();
       toast({ title: "Catégorie mise à jour" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const adjustStockMutation = useMutation({
+    mutationFn: ({ id, delta }: { id: string; delta: number }) =>
+      api.adjustCategoryStock(id, delta),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setShowRestockDialog(false);
+      setRestockCat(null);
+      setRestockDelta(0);
+      toast({ title: "Stock mis à jour" });
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
@@ -206,13 +248,28 @@ export default function Aids() {
     },
   });
 
+  const resetCatForm = () => {
+    setCatName("");
+    setCatDescription("");
+    setCatUnit("unités");
+    setCatStockQuantity(0);
+    setCatStockMin(0);
+  };
+
   const handleCatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!catName.trim()) return;
+    const payload = {
+      name: catName.trim(),
+      description: catDescription.trim(),
+      unit: catUnit.trim() || "unités",
+      stockQuantity: catStockQuantity,
+      stockMin: catStockMin,
+    };
     if (editingCat) {
-      updateCatMutation.mutate({ id: editingCat.id, name: catName.trim() });
+      updateCatMutation.mutate({ id: editingCat.id, ...payload });
     } else {
-      createCatMutation.mutate({ name: catName.trim() });
+      createCatMutation.mutate(payload);
     }
   };
 
@@ -305,151 +362,361 @@ export default function Aids() {
               )}
             </p>
           </div>
-          {!showQuickAdd && (
-            <Button
-              onClick={() => setShowQuickAdd(true)}
-              className="gap-2 bg-green-600 hover:bg-green-700"
-              size="lg"
-            >
-              <Zap className="w-5 h-5" />
-              Enregistrer une aide
-            </Button>
-          )}
+          <div className="flex gap-3">
+            {isAdmin && !showCatSection && (
+              <Button
+                onClick={() => setShowCatSection(true)}
+                className="gap-2 bg-blue-600 hover:bg-blue-700"
+                size="lg"
+              >
+                <PackagePlus className="w-5 h-5" />
+                Gérer les catégories
+              </Button>
+            )}
+            {!showQuickAdd && (
+              <Button
+                onClick={() => setShowQuickAdd(true)}
+                className="gap-2 bg-green-600 hover:bg-green-700"
+                size="lg"
+              >
+                <Zap className="w-5 h-5" />
+                Enregistrer une aide
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* ═══════════ CATEGORY MANAGEMENT (admin) ═══════════ */}
-        {isAdmin && (
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={() => setShowCatSection(!showCatSection)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition mb-3"
-            >
-              <Tags className="w-4 h-4" />
-              <span className="font-medium">
-                Gérer les catégories d'aide ({categories.length})
-              </span>
-              {showCatSection ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
+        {/* ═══════════ CATEGORY & STOCK MANAGEMENT (admin) ═══════════ */}
+        {isAdmin && showCatSection && (
+          <div className="bg-white rounded-xl border-2 border-blue-200 shadow-lg mb-8 overflow-hidden">
+            {/* Panel header */}
+            <div className="bg-blue-50 px-6 py-4 flex items-center justify-between border-b border-blue-200">
+              <div className="flex items-center gap-2">
+                <PackagePlus className="w-5 h-5 text-blue-600" />
+                <h2 className="font-semibold text-blue-900">
+                  Catégories d'aide & Stock
+                </h2>
+                <Badge variant="secondary" className="ml-2">
+                  {categories.length} catégorie{categories.length !== 1 ? "s" : ""}
+                </Badge>
+                {categories.filter((c) => c.stockQuantity <= c.stockMin && c.stockMin > 0).length > 0 && (
+                  <Badge variant="destructive" className="ml-1 gap-1">
+                    <TrendingDown className="w-3 h-3" />
+                    {categories.filter((c) => c.stockQuantity <= c.stockMin && c.stockMin > 0).length} en rupture
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    setShowCatForm(true);
+                    setEditingCat(null);
+                    resetCatForm();
+                  }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nouvelle catégorie
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setShowCatSection(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
 
-            {showCatSection && (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 mb-2">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs text-muted-foreground">
-                    Ces catégories apparaissent dans les formulaires de besoins
-                    et d'aides.
-                  </p>
-                  <Button
-                    size="sm"
-                    className="gap-1.5 shrink-0 ml-4"
-                    onClick={() => {
-                      setShowCatForm(true);
-                      setEditingCat(null);
-                      setCatName("");
-                    }}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Nouvelle catégorie
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => (
+            {/* Category cards grid */}
+            <div className="p-5">
+              <p className="text-xs text-muted-foreground mb-4">
+                Ces catégories apparaissent dans les formulaires de besoins et d'aides. Le stock est automatiquement décrémenté à chaque aide enregistrée.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {categories.map((cat) => {
+                  const isLow = cat.stockMin > 0 && cat.stockQuantity <= cat.stockMin;
+                  const isEmpty = cat.stockQuantity === 0 && cat.stockMin > 0;
+                  return (
                     <div
                       key={cat.id}
-                      className="inline-flex items-center gap-2 pl-3 pr-1 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                      className={`rounded-lg border p-4 transition ${
+                        isEmpty
+                          ? "border-red-300 bg-red-50"
+                          : isLow
+                          ? "border-orange-300 bg-orange-50"
+                          : "border-gray-200 bg-gray-50"
+                      }`}
                     >
-                      <span className="font-medium">{cat.name}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => {
-                          setEditingCat(cat);
-                          setCatName(cat.name);
-                          setShowCatForm(true);
-                        }}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                        onClick={() => {
-                          if (
-                            confirm(`Supprimer "${cat.name}" ?`)
-                          ) {
-                            deleteCatMutation.mutate(cat.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-sm truncate">{cat.name}</h3>
+                          {cat.description && (
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {cat.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 ml-2 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            title="Réapprovisionner"
+                            onClick={() => {
+                              setRestockCat({
+                                id: cat.id,
+                                name: cat.name,
+                                unit: cat.unit || "unités",
+                              });
+                              setRestockDelta(0);
+                              setShowRestockDialog(true);
+                            }}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => {
+                              setEditingCat({
+                                id: cat.id,
+                                name: cat.name,
+                                description: cat.description,
+                                unit: cat.unit,
+                                stockQuantity: cat.stockQuantity,
+                                stockMin: cat.stockMin,
+                              });
+                              setCatName(cat.name);
+                              setCatDescription(cat.description || "");
+                              setCatUnit(cat.unit || "unités");
+                              setCatStockQuantity(cat.stockQuantity ?? 0);
+                              setCatStockMin(cat.stockMin ?? 0);
+                              setShowCatForm(true);
+                            }}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                            onClick={() => {
+                              if (confirm(`Supprimer "${cat.name}" ?`)) {
+                                deleteCatMutation.mutate(cat.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      {/* Stock indicator */}
+                      <div className="flex items-center gap-2 mt-3">
+                        <Package className="w-4 h-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className={`font-semibold ${isEmpty ? "text-red-600" : isLow ? "text-orange-600" : "text-foreground"}`}>
+                              {cat.stockQuantity} {cat.unit || "unités"}
+                            </span>
+                            {cat.stockMin > 0 && (
+                              <span className="text-muted-foreground">
+                                min: {cat.stockMin}
+                              </span>
+                            )}
+                          </div>
+                          {cat.stockMin > 0 && (
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full transition-all ${
+                                  isEmpty
+                                    ? "bg-red-500"
+                                    : isLow
+                                    ? "bg-orange-500"
+                                    : "bg-green-500"
+                                }`}
+                                style={{
+                                  width: `${Math.min(100, (cat.stockQuantity / (cat.stockMin * 3)) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {isEmpty && (
+                        <p className="text-xs text-red-600 font-medium mt-2 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          Rupture de stock
+                        </p>
+                      )}
+                      {isLow && !isEmpty && (
+                        <p className="text-xs text-orange-600 font-medium mt-2 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          Stock faible
+                        </p>
+                      )}
                     </div>
-                  ))}
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Category Create/Edit Dialog */}
+        <Dialog
+          open={showCatForm}
+          onOpenChange={() => {
+            setShowCatForm(false);
+            setEditingCat(null);
+            resetCatForm();
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {editingCat
+                  ? "Modifier la catégorie"
+                  : "Nouvelle catégorie d'aide"}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCatSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nom *</Label>
+                <Input
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
+                  placeholder="Ex: Produits d'hygiène, Fournitures scolaires..."
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input
+                  value={catDescription}
+                  onChange={(e) => setCatDescription(e.target.value)}
+                  placeholder="Détails sur cette catégorie..."
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label>Unité</Label>
+                  <Input
+                    value={catUnit}
+                    onChange={(e) => setCatUnit(e.target.value)}
+                    placeholder="unités"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stock initial</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={catStockQuantity}
+                    onChange={(e) => setCatStockQuantity(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Seuil alerte</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={catStockMin}
+                    onChange={(e) => setCatStockMin(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Le seuil d'alerte déclenche un avertissement visuel quand le stock descend en dessous.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCatForm(false);
+                    setEditingCat(null);
+                    resetCatForm();
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createCatMutation.isPending ||
+                    updateCatMutation.isPending
+                  }
+                >
+                  {editingCat ? "Mettre à jour" : "Créer la catégorie"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Restock Dialog */}
+        <Dialog
+          open={showRestockDialog}
+          onOpenChange={() => {
+            setShowRestockDialog(false);
+            setRestockCat(null);
+            setRestockDelta(0);
+          }}
+        >
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Réapprovisionner</DialogTitle>
+            </DialogHeader>
+            {restockCat && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Ajouter du stock pour <span className="font-semibold text-foreground">{restockCat.name}</span>
+                </p>
+                <div className="space-y-2">
+                  <Label>Quantité à ajouter ({restockCat.unit})</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={restockDelta || ""}
+                    onChange={(e) => setRestockDelta(parseInt(e.target.value) || 0)}
+                    placeholder="Quantité reçue..."
+                    autoFocus
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowRestockDialog(false);
+                      setRestockCat(null);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    disabled={restockDelta <= 0 || adjustStockMutation.isPending}
+                    onClick={() => {
+                      if (restockCat && restockDelta > 0) {
+                        adjustStockMutation.mutate({
+                          id: restockCat.id,
+                          delta: restockDelta,
+                        });
+                      }
+                    }}
+                  >
+                    Ajouter au stock
+                  </Button>
                 </div>
               </div>
             )}
-
-            {/* Category Create/Edit Dialog */}
-            <Dialog
-              open={showCatForm}
-              onOpenChange={() => {
-                setShowCatForm(false);
-                setEditingCat(null);
-                setCatName("");
-              }}
-            >
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingCat
-                      ? "Modifier la catégorie"
-                      : "Nouvelle catégorie"}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCatSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Nom *</Label>
-                    <Input
-                      value={catName}
-                      onChange={(e) => setCatName(e.target.value)}
-                      placeholder="Ex: Produits d'hygiène, Fournitures scolaires..."
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowCatForm(false);
-                        setEditingCat(null);
-                        setCatName("");
-                      }}
-                    >
-                      Annuler
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={
-                        createCatMutation.isPending ||
-                        updateCatMutation.isPending
-                      }
-                    >
-                      {editingCat ? "Mettre à jour" : "Créer"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
         {/* ═══════════ QUICK-ADD PANEL ═══════════ */}
         {showQuickAdd && (
@@ -670,6 +937,8 @@ export default function Aids() {
                         const label = cat.name;
                         const isRedundant = recentlyGivenTypes.has(val);
                         const isSelected = selectedType === val;
+                        const isOutOfStock = cat.stockMin > 0 && cat.stockQuantity === 0;
+                        const isLowStock = cat.stockMin > 0 && cat.stockQuantity <= cat.stockMin && !isOutOfStock;
                         return (
                           <button
                             key={val}
@@ -680,12 +949,21 @@ export default function Aids() {
                             className={`relative px-3 py-3 rounded-lg text-sm font-medium border transition-all ${
                               isSelected
                                 ? "bg-green-100 border-green-400 text-green-800 ring-2 ring-green-300"
+                                : isOutOfStock
+                                ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
                                 : isRedundant
                                 ? "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
                                 : "bg-white border-gray-200 text-foreground hover:bg-gray-50"
                             }`}
                           >
                             {label}
+                            {cat.stockMin > 0 && (
+                              <span className={`block text-[10px] mt-0.5 ${
+                                isOutOfStock ? "text-red-500 font-semibold" : isLowStock ? "text-orange-500" : "text-muted-foreground"
+                              }`}>
+                                {isOutOfStock ? "Rupture" : `${cat.stockQuantity} ${cat.unit || "en stock"}`}
+                              </span>
+                            )}
                             {isRedundant && !isSelected && (
                               <span className="block text-[10px] text-blue-500 mt-0.5">
                                 Déjà donné
@@ -970,8 +1248,6 @@ export default function Aids() {
               );
             })}
           </div>
-        )}
-
         )}
       </div>
     </div>

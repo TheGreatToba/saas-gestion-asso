@@ -13,6 +13,8 @@ import {
   Heart,
   ClipboardList,
   Zap,
+  Package,
+  TrendingDown,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +31,7 @@ import { fr } from "date-fns/locale";
 
 function AdminDashboard() {
   const { user } = useAuth();
-  const { getCategoryLabel } = useCategories();
+  const { categories, getCategoryLabel } = useCategories();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
@@ -294,6 +296,62 @@ function AdminDashboard() {
               </Button>
             </Link>
           </div>
+
+          {/* Stock Alerts */}
+          {(() => {
+            const lowStock = categories.filter(
+              (c) => c.stockMin > 0 && c.stockQuantity <= c.stockMin
+            );
+            if (lowStock.length === 0) return null;
+            return (
+              <div className="bg-white rounded-lg border border-orange-200 shadow-sm p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingDown className="w-5 h-5 text-orange-600" />
+                  <h3 className="font-bold text-foreground">
+                    Alertes stock
+                  </h3>
+                  <Badge variant="destructive" className="ml-auto">
+                    {lowStock.length}
+                  </Badge>
+                </div>
+                <div className="space-y-3">
+                  {lowStock.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className={`flex items-center justify-between p-3 rounded-lg ${
+                        cat.stockQuantity === 0
+                          ? "bg-red-50 border border-red-200"
+                          : "bg-orange-50 border border-orange-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{cat.name}</span>
+                      </div>
+                      <span
+                        className={`text-sm font-bold ${
+                          cat.stockQuantity === 0 ? "text-red-600" : "text-orange-600"
+                        }`}
+                      >
+                        {cat.stockQuantity === 0
+                          ? "Rupture"
+                          : `${cat.stockQuantity} ${cat.unit || ""}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/aids">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-4 text-orange-600"
+                  >
+                    Gérer le stock
+                  </Button>
+                </Link>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
