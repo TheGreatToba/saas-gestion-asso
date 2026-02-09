@@ -44,14 +44,14 @@ class Storage {
   }
 
   private seed() {
-    // ---- Categories (dynamic aid/need types) ----
+    // ---- Categories (dynamic aid/need types with stock) ----
     this.categories = [
-      { id: "food", name: "Nourriture", createdAt: daysAgo(365) },
-      { id: "diapers", name: "Couches", createdAt: daysAgo(365) },
-      { id: "clothes", name: "Vêtements", createdAt: daysAgo(365) },
-      { id: "blankets", name: "Couvertures", createdAt: daysAgo(365) },
-      { id: "mattress", name: "Matelas", createdAt: daysAgo(365) },
-      { id: "medical", name: "Consultation médicale", createdAt: daysAgo(365) },
+      { id: "food", name: "Nourriture", description: "Colis alimentaires, denrées", unit: "colis", stockQuantity: 24, stockMin: 5, createdAt: daysAgo(365) },
+      { id: "diapers", name: "Couches", description: "Couches bébé toutes tailles", unit: "paquets", stockQuantity: 15, stockMin: 5, createdAt: daysAgo(365) },
+      { id: "clothes", name: "Vêtements", description: "Vêtements enfants et adultes", unit: "pièces", stockQuantity: 42, stockMin: 10, createdAt: daysAgo(365) },
+      { id: "blankets", name: "Couvertures", description: "Couvertures et draps", unit: "pièces", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
+      { id: "mattress", name: "Matelas", description: "Matelas simple et double", unit: "pièces", stockQuantity: 3, stockMin: 2, createdAt: daysAgo(365) },
+      { id: "medical", name: "Consultation médicale", description: "Consultations et soins", unit: "consultations", stockQuantity: 0, stockMin: 0, createdAt: daysAgo(365) },
     ];
 
     // ---- Users ----
@@ -268,6 +268,10 @@ class Storage {
     const category: Category = {
       id: finalId,
       name: input.name,
+      description: input.description ?? "",
+      unit: input.unit ?? "unités",
+      stockQuantity: input.stockQuantity ?? 0,
+      stockMin: input.stockMin ?? 0,
       createdAt: now(),
     };
     this.categories.push(category);
@@ -456,7 +460,19 @@ class Storage {
       family.lastVisitAt = input.date || now();
       family.updatedAt = now();
     }
+    // Decrement stock for the category
+    const cat = this.categories.find((c) => c.id === input.type);
+    if (cat && cat.stockQuantity > 0) {
+      cat.stockQuantity = Math.max(0, cat.stockQuantity - (input.quantity || 1));
+    }
     return aid;
+  }
+
+  adjustCategoryStock(categoryId: string, delta: number): Category | null {
+    const cat = this.categories.find((c) => c.id === categoryId);
+    if (!cat) return null;
+    cat.stockQuantity = Math.max(0, cat.stockQuantity + delta);
+    return cat;
   }
 
   // ==================== VISIT NOTES ====================

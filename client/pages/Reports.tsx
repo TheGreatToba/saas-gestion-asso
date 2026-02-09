@@ -102,11 +102,11 @@ export default function Reports() {
   const needsByType = categories.map((cat) => ({
     type: cat.id,
     label: cat.name,
-    total: needs.filter((n) => n.type === type).length,
-    pending: needs.filter((n) => n.type === type && n.status === "pending")
+    total: needs.filter((n) => n.type === cat.id).length,
+    pending: needs.filter((n) => n.type === cat.id && n.status === "pending")
       .length,
     urgent: needs.filter(
-      (n) => n.type === type && n.urgency === "high" && n.status !== "covered"
+      (n) => n.type === cat.id && n.urgency === "high" && n.status !== "covered"
     ).length,
   }));
 
