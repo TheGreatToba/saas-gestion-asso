@@ -47,6 +47,7 @@ export default function Needs() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
+  const filterFamilyId = searchParams.get("familyId") || "";
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -102,6 +103,7 @@ export default function Needs() {
 
   // Filter needs
   const filtered = needs.filter((need) => {
+    if (filterFamilyId && need.familyId !== filterFamilyId) return false;
     if (filterUrgency !== "all" && need.urgency !== filterUrgency) return false;
     if (filterType !== "all" && need.type !== filterType) return false;
     if (filterStatus !== "all" && need.status !== filterStatus) return false;
@@ -176,6 +178,24 @@ export default function Needs() {
               {urgentCount !== 1 ? "s" : ""}</strong>{" "}
               nécessite{urgentCount !== 1 ? "nt" : ""} une attention immédiate.
             </p>
+          </div>
+        )}
+
+        {/* Family filter indicator */}
+        {filterFamilyId && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-blue-600 shrink-0" />
+              <p className="text-sm text-blue-800">
+                Filtre actif : besoins de la famille{" "}
+                <strong>{familyMap.get(filterFamilyId)?.responsibleName || ""}</strong>
+              </p>
+            </div>
+            <Link to="/needs">
+              <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-100">
+                Voir tous les besoins
+              </Button>
+            </Link>
           </div>
         )}
 
@@ -399,6 +419,7 @@ export default function Needs() {
                   name="familyId"
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
                   required
+                  defaultValue={filterFamilyId}
                 >
                   <option value="">Sélectionner une famille</option>
                   {families.map((f) => (
