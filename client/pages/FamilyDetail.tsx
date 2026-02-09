@@ -38,7 +38,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
 import {
-  FAMILY_SITUATION_LABELS,
+  FAMILY_HOUSING_LABELS,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
   PRIORITY_LABELS,
@@ -237,11 +237,16 @@ export default function FamilyDetail() {
                   {family.responsibleName}
                 </h1>
                 <Badge
-                  variant={
-                    family.situation === "insured" ? "default" : "destructive"
+                  variant="outline"
+                  className={
+                    family.housing === "housed"
+                      ? "bg-green-100 text-green-800 border-green-300"
+                      : family.housing === "pending_placement"
+                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                      : "bg-red-100 text-red-800 border-red-300"
                   }
                 >
-                  {FAMILY_SITUATION_LABELS[family.situation]}
+                  {FAMILY_HOUSING_LABELS[family.housing]}
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">

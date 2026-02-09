@@ -287,8 +287,12 @@ export default function Aids() {
                               <p className="font-medium">{f.responsibleName}</p>
                               <p className="text-sm text-muted-foreground">{f.neighborhood} — {f.memberCount} membres, {f.childrenCount} enfant{f.childrenCount !== 1 ? "s" : ""}</p>
                             </div>
-                            <Badge variant={f.situation === "insured" ? "default" : "secondary"} className="shrink-0 ml-2">
-                              {f.situation === "insured" ? "Assuré" : "Non assuré"}
+                            <Badge variant="outline" className={`shrink-0 ml-2 ${
+                              f.housing === "housed" ? "bg-green-100 text-green-800 border-green-300"
+                                : f.housing === "pending_placement" ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : "bg-red-100 text-red-800 border-red-300"
+                            }`}>
+                              {f.housing === "housed" ? "Hébergé" : f.housing === "pending_placement" ? "En attente" : "Sans hébergement"}
                             </Badge>
                           </button>
                         ))
