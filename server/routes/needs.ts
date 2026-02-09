@@ -1,13 +1,40 @@
 import { RequestHandler } from "express";
-import { CreateNeedSchema } from "../../shared/schema";
+import { CreateNeedSchema, computeNeedPriority, getPriorityLevel } from "../../shared/schema";
 import { storage } from "../storage";
+import type { Need } from "../../shared/schema";
+
+/** Enrich needs with computed priority score and level */
+function enrichNeeds(needs: Need[]) {
+  const familyMap = new Map(storage.getAllFamilies().map((f) => [f.id, f]));
+  return needs.map((need) => {
+    const family = familyMap.get(need.familyId);
+    const score = computeNeedPriority(
+      need.urgency,
+      need.status,
+      need.createdAt,
+      family?.lastVisitAt,
+    );
+    return {
+      ...need,
+      priorityScore: score,
+      priorityLevel: getPriorityLevel(score),
+    };
+  });
+}
 
 export const handleGetNeeds: RequestHandler = (_req, res) => {
-  res.json(storage.getAllNeeds());
+  const needs = storage.getAllNeeds();
+  const enriched = enrichNeeds(needs);
+  // Sort by priority score descending (highest priority first)
+  enriched.sort((a, b) => b.priorityScore - a.priorityScore);
+  res.json(enriched);
 };
 
 export const handleGetNeedsByFamily: RequestHandler = (req, res) => {
-  res.json(storage.getNeedsByFamily(req.params.familyId as string));
+  const needs = storage.getNeedsByFamily(req.params.familyId as string);
+  const enriched = enrichNeeds(needs);
+  enriched.sort((a, b) => b.priorityScore - a.priorityScore);
+  res.json(enriched);
 };
 
 export const handleCreateNeed: RequestHandler = (req, res) => {

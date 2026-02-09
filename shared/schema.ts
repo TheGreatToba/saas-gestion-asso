@@ -138,6 +138,12 @@ export const NeedSchema = z.object({
 });
 export type Need = z.infer<typeof NeedSchema>;
 
+/** Need enriched with computed priority (returned by API) */
+export type EnrichedNeed = Need & {
+  priorityScore: number;
+  priorityLevel: PriorityLevel;
+};
+
 export const CreateNeedSchema = z.object({
   familyId: z.string(),
   type: z.string().min(1),
@@ -228,6 +234,73 @@ export const NEED_STATUS_LABELS: Record<NeedStatus, string> = {
   pending: "En attente",
   partial: "Partiellement couvert",
   covered: "Couvert",
+};
+
+// ============ PRIORITY SCORING ============
+
+/**
+ * Compute a dynamic priority score for a need.
+ * Higher score = more urgent to address.
+ *
+ * Factors:
+ * - Base urgency: high=30, medium=20, low=10
+ * - Status penalty: covered=-50, partial=-15, pending=0
+ * - Need age bonus: +1 per day since creation (uncovered needs grow)
+ * - Last visit penalty: +2 per day since last family visit (neglected families)
+ *
+ * Returns a number; higher = more urgent.
+ */
+export function computeNeedPriority(
+  urgency: NeedUrgency,
+  status: NeedStatus,
+  needCreatedAt: string,
+  familyLastVisitAt: string | null | undefined,
+): number {
+  const baseScores: Record<NeedUrgency, number> = { high: 30, medium: 20, low: 10 };
+  const statusPenalties: Record<NeedStatus, number> = { pending: 0, partial: -15, covered: -50 };
+
+  let score = baseScores[urgency] + statusPenalties[status];
+
+  const now = Date.now();
+  const daysSinceCreation = Math.max(0, (now - new Date(needCreatedAt).getTime()) / (1000 * 60 * 60 * 24));
+
+  // Uncovered needs grow in urgency over time
+  if (status !== "covered") {
+    score += Math.min(daysSinceCreation, 30); // cap at +30
+  }
+
+  // Neglected families increase urgency
+  if (familyLastVisitAt) {
+    const daysSinceVisit = Math.max(0, (now - new Date(familyLastVisitAt).getTime()) / (1000 * 60 * 60 * 24));
+    if (status !== "covered") {
+      score += Math.min(daysSinceVisit * 0.5, 15); // cap at +15
+    }
+  } else if (status !== "covered") {
+    score += 15; // never visited = max visit bonus
+  }
+
+  return Math.round(score);
+}
+
+/**
+ * Map a priority score to a display level.
+ */
+export type PriorityLevel = "critical" | "high" | "medium" | "low" | "none";
+
+export function getPriorityLevel(score: number): PriorityLevel {
+  if (score <= 0) return "none";
+  if (score >= 45) return "critical";
+  if (score >= 30) return "high";
+  if (score >= 15) return "medium";
+  return "low";
+}
+
+export const PRIORITY_LABELS: Record<PriorityLevel, string> = {
+  critical: "Critique",
+  high: "Haute",
+  medium: "Moyenne",
+  low: "Basse",
+  none: "Résolue",
 };
 
 export const AID_SOURCE_LABELS: Record<AidSource, string> = {
