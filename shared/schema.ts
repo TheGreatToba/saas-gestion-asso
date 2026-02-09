@@ -61,8 +61,11 @@ export type CreateArticleInput = z.infer<typeof CreateArticleSchema>;
 
 // ============ FAMILY ============
 
-export const FamilySituation = z.enum(["insured", "uninsured"]);
-export type FamilySituation = z.infer<typeof FamilySituation>;
+export const FamilyHousing = z.enum(["housed", "pending_placement", "not_housed"]);
+export type FamilyHousing = z.infer<typeof FamilyHousing>;
+
+/** @deprecated Use FamilyHousing instead */
+export type FamilySituation = FamilyHousing;
 
 export const FamilySchema = z.object({
   id: z.string(),
@@ -72,7 +75,7 @@ export const FamilySchema = z.object({
   neighborhood: z.string(),
   memberCount: z.number().int().min(1, "Min 1 membre"),
   childrenCount: z.number().int().min(0),
-  situation: FamilySituation,
+  housing: FamilyHousing,
   notes: z.string().optional().default(""),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -87,7 +90,7 @@ export const CreateFamilySchema = z.object({
   neighborhood: z.string().min(1, "Quartier requis"),
   memberCount: z.number().int().min(1, "Min 1 membre"),
   childrenCount: z.number().int().min(0),
-  situation: FamilySituation,
+  housing: FamilyHousing,
   notes: z.string().optional().default(""),
 });
 export type CreateFamilyInput = z.infer<typeof CreateFamilySchema>;
@@ -309,10 +312,14 @@ export const AID_SOURCE_LABELS: Record<AidSource, string> = {
   partner: "Partenaire",
 };
 
-export const FAMILY_SITUATION_LABELS: Record<FamilySituation, string> = {
-  insured: "Assuré",
-  uninsured: "Non assuré",
+export const FAMILY_HOUSING_LABELS: Record<FamilyHousing, string> = {
+  housed: "Hébergé en foyer",
+  pending_placement: "En attente de placement",
+  not_housed: "Sans hébergement",
 };
+
+/** @deprecated Use FAMILY_HOUSING_LABELS */
+export const FAMILY_SITUATION_LABELS = FAMILY_HOUSING_LABELS;
 
 export const CHILD_SEX_LABELS: Record<ChildSex, string> = {
   male: "Garçon",

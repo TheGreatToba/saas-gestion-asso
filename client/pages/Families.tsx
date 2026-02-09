@@ -32,8 +32,8 @@ import {
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { FAMILY_SITUATION_LABELS } from "@shared/schema";
-import type { CreateFamilyInput, Family } from "@shared/schema";
+import { FAMILY_HOUSING_LABELS } from "@shared/schema";
+import type { CreateFamilyInput, Family, FamilyHousing } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -46,7 +46,7 @@ const emptyForm: CreateFamilyInput = {
   neighborhood: "",
   memberCount: 1,
   childrenCount: 0,
-  situation: "uninsured",
+  housing: "not_housed",
   notes: "",
 };
 
@@ -119,7 +119,7 @@ export default function Families() {
       neighborhood: family.neighborhood,
       memberCount: family.memberCount,
       childrenCount: family.childrenCount,
-      situation: family.situation,
+      housing: family.housing,
       notes: family.notes || "",
     });
   };
@@ -202,14 +202,16 @@ export default function Families() {
                         {family.responsibleName}
                       </Link>
                       <Badge
-                        variant={
-                          family.situation === "insured"
-                            ? "default"
-                            : "destructive"
-                        }
-                        className="shrink-0"
+                        variant="outline"
+                        className={`shrink-0 ${
+                          family.housing === "housed"
+                            ? "bg-green-100 text-green-800 border-green-300"
+                            : family.housing === "pending_placement"
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : "bg-red-100 text-red-800 border-red-300"
+                        }`}
                       >
-                        {FAMILY_SITUATION_LABELS[family.situation]}
+                        {FAMILY_HOUSING_LABELS[family.housing]}
                       </Badge>
                     </div>
 
@@ -364,19 +366,20 @@ export default function Families() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Situation</Label>
+                  <Label>Hébergement (foyer)</Label>
                   <Select
-                    value={form.situation}
-                    onValueChange={(v: "insured" | "uninsured") =>
-                      setForm({ ...form, situation: v })
+                    value={form.housing}
+                    onValueChange={(v: FamilyHousing) =>
+                      setForm({ ...form, housing: v })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="insured">Assuré</SelectItem>
-                      <SelectItem value="uninsured">Non assuré</SelectItem>
+                      <SelectItem value="housed">Hébergé en foyer</SelectItem>
+                      <SelectItem value="pending_placement">En attente de placement</SelectItem>
+                      <SelectItem value="not_housed">Sans hébergement</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
