@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Initialize user from session on mount
   useEffect(() => {
     const session = readSession();
     if (session?.user && session?.token) {

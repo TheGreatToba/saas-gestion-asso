@@ -6,7 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
+import type { User } from "@shared/schema";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -16,8 +17,6 @@ import FamilyDetail from "./pages/FamilyDetail";
 import Needs from "./pages/Needs";
 import Aids from "./pages/Aids";
 import Reports from "./pages/Reports";
-import Stock from "./pages/Stock";
-import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -31,6 +30,22 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const [sessionUser, setSessionUser] = useState<User | null>(null);
+
+  // Check session storage as fallback for race condition handling
+  useEffect(() => {
+    if (!user && !isLoading) {
+      const session = localStorage.getItem("socialaid_session");
+      if (session) {
+        try {
+          const parsed = JSON.parse(session) as { user?: User };
+          setSessionUser(parsed.user || null);
+        } catch {
+          setSessionUser(null);
+        }
+      }
+    }
+  }, [user, isLoading]);
 
   if (isLoading) {
     return (
@@ -40,7 +55,8 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) {
+  const currentUser = user || sessionUser;
+  if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
 
@@ -49,6 +65,22 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AdminRoute({ children }: { children: ReactNode }) {
   const { user, isLoading, isAdmin } = useAuth();
+  const [sessionUser, setSessionUser] = useState<User | null>(null);
+
+  // Check session storage as fallback for race condition handling
+  useEffect(() => {
+    if (!user && !isLoading) {
+      const session = localStorage.getItem("socialaid_session");
+      if (session) {
+        try {
+          const parsed = JSON.parse(session) as { user?: User };
+          setSessionUser(parsed.user || null);
+        } catch {
+          setSessionUser(null);
+        }
+      }
+    }
+  }, [user, isLoading]);
 
   if (isLoading) {
     return (
@@ -58,11 +90,12 @@ function AdminRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) {
+  const currentUser = user || sessionUser;
+  if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isAdmin) {
+  if (currentUser.role !== "admin") {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -121,26 +154,10 @@ export default function App() {
                 }
               />
               <Route
-                path="/stock"
-                element={
-                  <AdminRoute>
-                    <Stock />
-                  </AdminRoute>
-                }
-              />
-              <Route
                 path="/reports"
                 element={
                   <AdminRoute>
                     <Reports />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/users"
-                element={
-                  <AdminRoute>
-                    <Users />
                   </AdminRoute>
                 }
               />
