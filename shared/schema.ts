@@ -219,7 +219,13 @@ export const CreateAidSchema = z.object({
   notes: z.string().optional().default(""),
   proofUrl: z.string().optional().default(""),
 });
-export type CreateAidInput = z.infer<typeof CreateAidSchema>;
+/** Payload client pour créer une aide (sans champs volunteer). */
+export type CreateAidClientInput = z.infer<typeof CreateAidSchema>;
+/** Payload enrichi côté storage (serveur) avec volunteerId / volunteerName. */
+export type CreateAidStorageInput = CreateAidClientInput & {
+  volunteerId: string;
+  volunteerName: string;
+};
 
 // ============ VISIT NOTE ============
 
@@ -234,20 +240,15 @@ export const VisitNoteSchema = z.object({
 });
 export type VisitNote = z.infer<typeof VisitNoteSchema>;
 
-/**
- * Base payload envoyé par le client pour créer une note de visite.
- * Les champs volunteerId / volunteerName sont injectés côté serveur
- * à partir de l'utilisateur authentifié (res.locals.user).
- */
+/** Payload client pour créer une note de visite (sans champs volunteer). */
 export const CreateVisitNoteSchema = z.object({
   familyId: z.string(),
   content: z.string().min(1, "Contenu requis"),
   date: z.string(),
 });
-
-// Type étendu utilisé côté storage (server-only),
-// qui inclut les informations de bénévole.
-export type CreateVisitNoteInput = z.infer<typeof CreateVisitNoteSchema> & {
+export type CreateVisitNoteClientInput = z.infer<typeof CreateVisitNoteSchema>;
+/** Payload enrichi côté storage (serveur) avec volunteerId / volunteerName. */
+export type CreateVisitNoteStorageInput = CreateVisitNoteClientInput & {
   volunteerId: string;
   volunteerName: string;
 };

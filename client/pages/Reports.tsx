@@ -107,7 +107,7 @@ export default function Reports() {
   const [exporting, setExporting] = useState(false);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
-  const [mapping, setMapping] = useState<Record<FieldKey, MappingRule>>({});
+  const [mapping, setMapping] = useState<Partial<Record<FieldKey, MappingRule>>>({});
   const [duplicateStrategy, setDuplicateStrategy] = useState<"skip" | "update">("skip");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<import("@shared/api").ImportFamiliesResult | null>(null);

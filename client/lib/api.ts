@@ -12,8 +12,8 @@ import type {
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
-  CreateAidInput,
-  CreateVisitNoteInput,
+  CreateAidClientInput,
+  CreateVisitNoteClientInput,
   CreateCategoryInput,
   CreateArticleInput,
 } from "@shared/schema";
@@ -181,7 +181,7 @@ export const api = {
   getAidsByFamily: (familyId: string) =>
     fetchJson<Aid[]>(`/api/families/${familyId}/aids`),
 
-  createAid: (data: CreateAidInput) =>
+  createAid: (data: CreateAidClientInput) =>
     fetchJson<Aid>("/api/aids", {
       method: "POST",
       body: JSON.stringify(data),
@@ -193,7 +193,7 @@ export const api = {
 
   createNote: (
     familyId: string,
-    data: Omit<CreateVisitNoteInput, "familyId">,
+    data: Omit<CreateVisitNoteClientInput, "familyId">,
   ) =>
     fetchJson<VisitNote>(`/api/families/${familyId}/notes`, {
       method: "POST",

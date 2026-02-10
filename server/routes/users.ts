@@ -12,7 +12,9 @@ export const handleCreateUser: RequestHandler = (req, res) => {
   }
   try {
     const user = storage.createUser(parsed.data);
-    const actor = (res as any).locals?.user;
+    const actor = (res as any).locals?.user as
+      | { id: string; name: string }
+      | undefined;
     if (actor) {
       storage.appendAuditLog({
         userId: actor.id,
@@ -39,7 +41,9 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
     return;
   }
 
-  const actor = (res as any).locals?.user as { id: string } | undefined;
+  const actor = (res as any).locals?.user as
+    | { id: string; name: string }
+    | undefined;
   const targetId = req.params.id as string;
   const current = storage.getUser(targetId);
   if (!current) {

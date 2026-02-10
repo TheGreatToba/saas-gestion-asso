@@ -67,6 +67,8 @@ export default function FamilyDetail() {
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddNeed, setShowAddNeed] = useState(false);
   const [showAddAid, setShowAddAid] = useState(false);
+  const [addAidPrefillType, setAddAidPrefillType] = useState<string>("");
+  const [addAidPrefillNotes, setAddAidPrefillNotes] = useState("");
   const [showAddNote, setShowAddNote] = useState(false);
   const [showAddDocument, setShowAddDocument] = useState(false);
 
@@ -178,7 +180,7 @@ export default function FamilyDetail() {
   });
 
   const addNoteMutation = useMutation({
-    mutationFn: (data: { volunteerId: string; volunteerName: string; content: string; date: string }) =>
+    mutationFn: (data: { content: string; date: string }) =>
       api.createNote(id!, data),
     onSuccess: () => {
       invalidateAll();
@@ -941,7 +943,16 @@ export default function FamilyDetail() {
       </Dialog>
 
       {/* Add Aid Dialog — with pending needs context */}
-      <Dialog open={showAddAid} onOpenChange={setShowAddAid}>
+      <Dialog
+        open={showAddAid}
+        onOpenChange={(open) => {
+          setShowAddAid(open);
+          if (!open) {
+            setAddAidPrefillType("");
+            setAddAidPrefillNotes("");
+          }
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -966,14 +977,8 @@ export default function FamilyDetail() {
                       type="button"
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-white border border-orange-200 text-orange-800 hover:bg-orange-100 transition"
                       onClick={() => {
-                        // Set the type dropdown value via a hidden approach
-                        const typeSelect = document.querySelector('select[name="aidType"]') as HTMLSelectElement;
-                        if (typeSelect) typeSelect.value = need.type;
-                        // Also set notes if details exist
-                        if (need.details) {
-                          const notesInput = document.querySelector('textarea[name="aidNotes"]') as HTMLTextAreaElement;
-                          if (notesInput) notesInput.value = need.details;
-                        }
+                        setAddAidPrefillType(need.type);
+                        setAddAidPrefillNotes(need.details ?? "");
                       }}
                     >
                       {getCategoryLabel(need.type)}
@@ -1035,6 +1040,8 @@ export default function FamilyDetail() {
                 <select
                   name="aidType"
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
+                  value={addAidPrefillType || categories[0]?.id ?? ""}
+                  onChange={(e) => setAddAidPrefillType(e.target.value)}
                   required
                 >
                   {categories.map((cat) => (
@@ -1071,7 +1078,13 @@ export default function FamilyDetail() {
             </div>
             <div className="space-y-2">
               <Label>Notes</Label>
-              <Textarea name="aidNotes" rows={2} placeholder="Détails de l'aide..." />
+              <Textarea
+                name="aidNotes"
+                rows={2}
+                placeholder="Détails de l'aide..."
+                value={addAidPrefillNotes}
+                onChange={(e) => setAddAidPrefillNotes(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Preuve (lien photo ou document)</Label>

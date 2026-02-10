@@ -10,8 +10,8 @@ import type {
   CreateFamilyInput,
   CreateChildInput,
   CreateNeedInput,
-  CreateAidInput,
-  CreateVisitNoteInput,
+  CreateAidStorageInput,
+  CreateVisitNoteStorageInput,
   CreateCategoryInput,
   CreateArticleInput,
   CreateUserInput,
@@ -713,7 +713,7 @@ class Storage {
       needParams.push(...matchingCategoryIds);
     }
 
-    // Conditions sur les commentaires et détails
+    // Conditions sur les commentaires et détails (toujours présentes → requête jamais vide)
     needConditions.push("lower(comment) LIKE ?");
     needConditions.push("lower(details) LIKE ?");
     needParams.push(like, like);
@@ -924,7 +924,7 @@ class Storage {
     return rows.map(mapAid);
   }
 
-  createAid(input: CreateAidInput): Aid {
+  createAid(input: CreateAidStorageInput): Aid {
     const id = "aid-" + generateId();
     const createdAt = now();
     const date = input.date || now();
@@ -1003,7 +1003,7 @@ class Storage {
     return rows.map(mapVisitNote);
   }
 
-  createVisitNote(input: CreateVisitNoteInput): VisitNote {
+  createVisitNote(input: CreateVisitNoteStorageInput): VisitNote {
     const id = "vn-" + generateId();
     const createdAt = now();
     this.db

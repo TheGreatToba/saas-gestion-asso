@@ -64,7 +64,7 @@ function createTestDb(): Database.Database {
 
 describe("Storage.searchGlobal", () => {
   let db: Database.Database;
-  let storage: TestStorage;
+  let storage: Storage;
 
   beforeEach(() => {
     db = createTestDb();
@@ -106,7 +106,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier A",
       4,
       2,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -148,7 +148,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier B",
       3,
       1,
-      "house",
+      "housed",
       now,
       now,
     );
@@ -188,7 +188,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier C",
       5,
       3,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -230,7 +230,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier D",
       2,
       0,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -274,7 +274,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier E",
       6,
       4,
-      "house",
+      "housed",
       now,
       now,
     );
@@ -318,7 +318,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier F",
       4,
       2,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -364,7 +364,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier G",
       3,
       1,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -431,7 +431,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier H",
       4,
       2,
-      "apartment",
+      "housed",
       now,
       now,
     );
@@ -448,7 +448,7 @@ describe("Storage.searchGlobal", () => {
       "Quartier I",
       5,
       3,
-      "house",
+      "housed",
       now,
       now,
     );

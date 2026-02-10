@@ -36,7 +36,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
 import { NEED_STATUS_LABELS } from "@shared/schema";
-import type { AidSource, EnrichedNeed, CreateAidInput } from "@shared/schema";
+import type { AidSource, EnrichedNeed, CreateAidClientInput } from "@shared/schema";
 import { statusBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
@@ -130,7 +130,7 @@ export default function Aids() {
   // ═══════ Mutations ═══════
 
   const createMutation = useMutation({
-    mutationFn: async (payloads: CreateAidInput[]) => {
+    mutationFn: async (payloads: CreateAidClientInput[]) => {
       return Promise.all(payloads.map((payload) => api.createAid(payload)));
     },
     onSuccess: (_data, payloads) => {
@@ -159,7 +159,7 @@ export default function Aids() {
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFamilyId || !canSubmit) return;
-    const payloads: CreateAidInput[] = aidItems
+    const payloads: CreateAidClientInput[] = aidItems
       .filter((item) => item.categoryId)
       .map((item) => ({
         familyId: selectedFamilyId,
