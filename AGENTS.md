@@ -156,8 +156,10 @@ const data: MyRouteResponse = await response.json();
 
 ### Security before production
 
-- **Auth**: The API currently trusts the `x-user-id` header for authenticated requests. This is spoofable by the client and must be replaced by a proper mechanism (e.g. signed JWT or server-side sessions) before real production use.
-- **Passwords**: Stored as bcrypt hashes in `passwords`; plain-text legacy rows are migrated to hash on first successful login.
+- **Auth**: The API uses an HMAC-signed bearer-like token (see `server/auth-token.ts`) that is accepted either via `Authorization: Bearer <token>` or via an `auth_token` cookie. The token encodes the user id and an expiration timestamp and is verified server-side on each request (see `requireAuth` in `server/index.ts`). This is not a full JWT/OAuth implementation (pas de `iss`, `aud`, `kid`, rotation/blacklist centralisée, etc.) mais reste adapté à un déploiement simple tant que l’`AUTH_SECRET` est correctement géré.
+- **AUTH_SECRET**: Le secret de signature est lu depuis la variable d’environnement `AUTH_SECRET`. En production (`NODE_ENV === "production"`), l’absence de cette variable fait échouer le démarrage du serveur (fail fast). En développement, un secret de test (`dev-insecure-secret-change-me`) est utilisé pour simplifier la prise en main.
+- **Session storage**: Le token d’authentification est principalement stocké dans un cookie HttpOnly côté serveur. Par compatibilité, un cache mémoire et un stockage local de la session côté client sont utilisés, mais la version actuelle ne persiste plus le token dans `localStorage` lors des nouveaux logins (uniquement l’objet `user` y est sauvegardé).
+- **Passwords**: Les mots de passe sont hachés avec `scrypt` (voir `server/passwords.ts`) et stockés dans le fichier `passwords`. Les anciennes entrées en clair sont migrées vers un hash au premier login réussi.
 - **Extra API routes**: Beyond the minimal example routes, this app adds `/api/audit-logs`, `/api/search`, and `/api/families/:familyId/documents` (see `server/index.ts`).
 
 ## Architecture Notes
