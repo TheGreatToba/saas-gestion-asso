@@ -267,6 +267,10 @@ export default function FamilyDetail() {
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const phoneHref = family.phone.replace(/\s+/g, "");
+  const mapQuery = encodeURIComponent(`${family.address}, ${family.neighborhood}`);
+  const mapHref = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -331,6 +335,20 @@ export default function FamilyDetail() {
                   {family.childrenCount !== 1 ? "s" : ""}
                 </span>
               </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                  <a href={`tel:${phoneHref}`} aria-label="Appeler la famille">
+                    <Phone className="w-4 h-4" />
+                    Appeler
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                  <a href={mapHref} target="_blank" rel="noopener noreferrer">
+                    <MapPin className="w-4 h-4" />
+                    Itinéraire
+                  </a>
+                </Button>
+              </div>
               {(family.notes || family.healthNotes) && (
                 <div className="mt-3 space-y-2">
                   {family.healthNotes && (
@@ -352,7 +370,7 @@ export default function FamilyDetail() {
         {/* Quick actions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           <Button
-            className="gap-2 bg-green-600 hover:bg-green-700"
+            className="gap-2 bg-green-600 hover:bg-green-700 w-full"
             onClick={() => setShowAddAid(true)}
           >
             <Gift className="w-4 h-4" />
@@ -360,7 +378,7 @@ export default function FamilyDetail() {
           </Button>
           <Button
             variant="outline"
-            className="gap-2"
+            className="gap-2 w-full"
             onClick={() => setShowAddNeed(true)}
           >
             <AlertTriangle className="w-4 h-4" />
@@ -368,7 +386,7 @@ export default function FamilyDetail() {
           </Button>
           <Button
             variant="outline"
-            className="gap-2"
+            className="gap-2 w-full"
             onClick={() => setShowAddNote(true)}
           >
             <FileText className="w-4 h-4" />

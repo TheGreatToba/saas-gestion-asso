@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,19 @@ const emptyForm: CreateUserInput = {
 export default function Users() {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [form, setForm] = useState<CreateUserInput>(emptyForm);
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   const { data: users = [], isLoading, error } = useQuery({
     queryKey: ["users"],
@@ -153,8 +161,8 @@ export default function Users() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Rechercher par nom, email, rôle..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="pl-10"
             />
           </div>

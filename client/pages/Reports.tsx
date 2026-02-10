@@ -254,6 +254,91 @@ export default function Reports() {
     return new Set(families.map((f) => normalizePhone(f.phone)));
   }, [families]);
 
+  const missingRequiredFields = useMemo(() => {
+    if (csvHeaders.length === 0) return [];
+    return FIELD_DEFS.filter((field) => field.required).filter((field) => {
+      const rule = mapping[field.key];
+      if (!rule) return true;
+      if (rule.source === "fixed") {
+        return !rule.fixed || !rule.fixed.trim();
+      }
+      return !rule.column;
+    });
+  }, [csvHeaders.length, mapping]);
+
+  const validationRows = useMemo(() => {
+    if (mappedRows.length === 0) return [];
+    const seenPhones = new Set<string>();
+    return mappedRows.map((row, index) => {
+      const prepared: CreateFamilyInput = {
+        responsibleName: row.responsibleName ?? "",
+        phone: row.phone ?? "",
+        address: row.address ?? "",
+        neighborhood: row.neighborhood ?? "",
+        memberCount: row.memberCount ?? 1,
+        childrenCount: row.childrenCount ?? 0,
+        housing: row.housing ?? "not_housed",
+        housingName: row.housingName ?? "",
+        healthNotes: row.healthNotes ?? "",
+        hasMedicalNeeds: row.hasMedicalNeeds ?? false,
+        notes: row.notes ?? "",
+      };
+      const validation = CreateFamilySchema.safeParse(prepared);
+      const normalizedPhone = normalizePhone(prepared.phone);
+      const duplicateExisting =
+        !!normalizedPhone && existingPhones.has(normalizedPhone);
+      let duplicateInFile = false;
+      if (normalizedPhone) {
+        if (seenPhones.has(normalizedPhone)) {
+          duplicateInFile = true;
+        } else {
+          seenPhones.add(normalizedPhone);
+        }
+      }
+      return {
+        index: index + 1,
+        prepared,
+        valid: validation.success,
+        duplicateExisting,
+        duplicateInFile,
+        errors: validation.success ? {} : validation.error.flatten().fieldErrors,
+      };
+    });
+  }, [mappedRows, existingPhones]);
+
+  const invalidCountAll = useMemo(
+    () => validationRows.filter((row) => !row.valid).length,
+    [validationRows],
+  );
+
+  const duplicateExistingCount = useMemo(
+    () => validationRows.filter((row) => row.duplicateExisting).length,
+    [validationRows],
+  );
+
+  const duplicateInFileCount = useMemo(
+    () => validationRows.filter((row) => row.duplicateInFile).length,
+    [validationRows],
+  );
+
+  const validationErrorsPreview = useMemo(() => {
+    const labelMap = new Map(FIELD_DEFS.map((field) => [field.key, field.label]));
+    return validationRows
+      .filter((row) => !row.valid)
+      .slice(0, 5)
+      .map((row) => {
+        const fields = Object.keys(row.errors).map(
+          (key) => labelMap.get(key as FieldKey) ?? key,
+        );
+        return {
+          row: row.index,
+          message: fields.length
+            ? `Champs manquants/invalides : ${fields.join(", ")}`
+            : "Données invalides",
+        };
+      });
+  }, [validationRows]);
+
   const preview = useMemo(() => {
     if (mappedRows.length === 0) return [];
     return mappedRows.slice(0, 10).map((row) => {
@@ -279,16 +364,6 @@ export default function Reports() {
       };
     });
   }, [mappedRows, existingPhones]);
-
-  const invalidCount = useMemo(
-    () => preview.filter((p) => !p.valid).length,
-    [preview],
-  );
-
-  const duplicateCount = useMemo(
-    () => preview.filter((p) => p.duplicate).length,
-    [preview],
-  );
 
   const exportCSV = (type: "families" | "needs" | "aids") => {
     setExporting(true);
@@ -642,16 +717,29 @@ export default function Reports() {
                     </div>
                   </div>
 
+                  {missingRequiredFields.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                      Champs obligatoires non mappés :{" "}
+                      {missingRequiredFields.map((field) => field.label).join(", ")}.
+                      Ajoutez un mapping ou une valeur fixe avant d'importer.
+                    </div>
+                  )}
+
                   <div className="bg-white border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center gap-3 mb-3">
                       <AlertCircle className="w-4 h-4 text-blue-600" />
                       <p className="text-sm font-medium">Prévisualisation</p>
-                      {invalidCount > 0 && (
-                        <Badge variant="destructive">{invalidCount} ligne(s) invalide(s)</Badge>
+                      {invalidCountAll > 0 && (
+                        <Badge variant="destructive">{invalidCountAll} ligne(s) invalide(s)</Badge>
                       )}
-                      {duplicateCount > 0 && (
+                      {duplicateExistingCount > 0 && (
                         <Badge variant="outline" className="text-orange-600 border-orange-200">
-                          {duplicateCount} doublon(s)
+                          {duplicateExistingCount} doublon(s) existants
+                        </Badge>
+                      )}
+                      {duplicateInFileCount > 0 && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200">
+                          {duplicateInFileCount} doublon(s) dans le fichier
                         </Badge>
                       )}
                     </div>
@@ -689,6 +777,17 @@ export default function Reports() {
                     </div>
                   </div>
 
+                  {validationErrorsPreview.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      <p className="font-medium mb-2">Erreurs détectées (extrait)</p>
+                      <div className="space-y-1">
+                        {validationErrorsPreview.map((err) => (
+                          <div key={`row-${err.row}`}>Ligne {err.row}: {err.message}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row gap-3 items-center">
                     <Button
                       onClick={async () => {
@@ -715,7 +814,7 @@ export default function Reports() {
                           setImporting(false);
                         }
                       }}
-                      disabled={mappedRows.length === 0 || importing}
+                      disabled={mappedRows.length === 0 || importing || missingRequiredFields.length > 0}
                       className="gap-2"
                     >
                       {importing ? "Import en cours..." : `Importer ${mappedRows.length} ligne(s)`}
