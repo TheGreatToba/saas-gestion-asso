@@ -215,8 +215,6 @@ export const CreateAidSchema = z.object({
   articleId: z.string().optional().default(""),
   quantity: z.number().min(1, "Quantité min 1"),
   date: z.string(),
-  volunteerId: z.string(),
-  volunteerName: z.string(),
   source: AidSource,
   notes: z.string().optional().default(""),
   proofUrl: z.string().optional().default(""),
@@ -238,8 +236,6 @@ export type VisitNote = z.infer<typeof VisitNoteSchema>;
 
 export const CreateVisitNoteSchema = z.object({
   familyId: z.string(),
-  volunteerId: z.string(),
-  volunteerName: z.string(),
   content: z.string().min(1, "Contenu requis"),
   date: z.string(),
 });

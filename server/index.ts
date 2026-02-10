@@ -3,7 +3,7 @@ import express, { RequestHandler } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { handleDemo } from "./routes/demo";
-import { handleLogin, handleGetUsers } from "./routes/auth";
+import { handleLogin, handleGetUsers, handleLogout, handleMe } from "./routes/auth";
 import { handleCreateUser, handleUpdateUser } from "./routes/users";
 import {
   handleGetFamilies,
@@ -165,6 +165,8 @@ export function createServer() {
 
   // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", rateLimitLogin, handleLogin);
+  app.get("/api/auth/me", requireAuth, handleMe);
+  app.post("/api/auth/logout", requireAuth, handleLogout);
 
   // Categories (public read, admin write)
   app.get("/api/categories", handleGetCategories);

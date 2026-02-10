@@ -16,8 +16,19 @@ export const handleCreateAid: RequestHandler = (req, res) => {
     res.status(400).json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
-  const aid = storage.createAid(parsed.data);
+
   const user = (res as any).locals?.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentification requise" });
+    return;
+  }
+
+  const aid = storage.createAid({
+    ...parsed.data,
+    volunteerId: user.id,
+    volunteerName: user.name,
+  });
+
   if (user) {
     storage.appendAuditLog({
       userId: user.id,

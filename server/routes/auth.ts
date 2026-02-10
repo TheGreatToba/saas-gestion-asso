@@ -39,6 +39,26 @@ export const handleLogin: RequestHandler = (req, res) => {
   res.json({ user: result.user, token });
 };
 
+export const handleMe: RequestHandler = (_req, res) => {
+  const user = (res as any).locals?.user;
+  if (!user) {
+    res.status(401).json({ error: "Non authentifié" });
+    return;
+  }
+  res.json({ user });
+};
+
+export const handleLogout: RequestHandler = (_req, res) => {
+  // Supprime le cookie côté client en le remplaçant par un cookie expiré.
+  res.cookie("auth_token", "", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 0,
+  });
+  res.status(204).send();
+};
+
 export const handleGetUsers: RequestHandler = (_req, res) => {
   const users = storage.getAllUsers();
   res.json(users);

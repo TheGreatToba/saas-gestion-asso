@@ -167,8 +167,6 @@ export default function Aids() {
         articleId: item.articleId || "",
         quantity: item.quantity,
         date: new Date().toISOString(),
-        volunteerId: user?.id || "",
-        volunteerName: user?.name || "",
         source,
         notes,
         proofUrl,

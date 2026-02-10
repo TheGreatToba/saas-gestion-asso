@@ -29,7 +29,18 @@ export const handleCreateNote: RequestHandler = (req, res) => {
       .json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
-  const note = storage.createVisitNote(parsed.data);
+
+  const user = (res as any).locals?.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentification requise" });
+    return;
+  }
+
+  const note = storage.createVisitNote({
+    ...parsed.data,
+    volunteerId: user.id,
+    volunteerName: user.name,
+  });
   const user = (res as any).locals?.user;
   if (user) {
     storage.appendAuditLog({

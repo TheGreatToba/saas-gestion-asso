@@ -1022,8 +1022,6 @@ export default function FamilyDetail() {
                 type: fd.get("aidType") as string,
                 quantity: parseInt(fd.get("quantity") as string) || 1,
                 date: new Date().toISOString(),
-                volunteerId: user?.id || "",
-                volunteerName: user?.name || "",
                 source: fd.get("source") as AidSource,
                 notes: fd.get("aidNotes") as string,
                 proofUrl: fd.get("proofUrl") as string,
@@ -1111,8 +1109,6 @@ export default function FamilyDetail() {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               addNoteMutation.mutate({
-                volunteerId: user?.id || "",
-                volunteerName: user?.name || "",
                 content: fd.get("content") as string,
                 date: fd.get("date") as string,
               });

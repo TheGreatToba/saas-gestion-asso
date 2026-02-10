@@ -18,6 +18,7 @@ import type {
   CreateArticleInput,
 } from "@shared/schema";
 import { getSessionToken, clearSession } from "@/lib/session";
+import type { LoginResponse } from "@shared/api";
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getSessionToken();
@@ -55,6 +56,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 // ==================== Dashboard ====================
 
 export const api = {
+  // Auth helpers
+  getMe: () => fetchJson<{ user: import("@shared/schema").User }>("/api/auth/me"),
+
   // Categories
   getCategories: () => fetchJson<Category[]>("/api/categories"),
 
