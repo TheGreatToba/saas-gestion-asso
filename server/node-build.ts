@@ -12,11 +12,19 @@ const distPath = path.join(__dirname, "../spa");
 // 1. Fichiers statiques (assets, index.html pour "/") — doit rester en premier
 app.use(express.static(distPath));
 
-// 2. Fallback SPA : tout le reste (sauf /api et /health) → index.html
-// Middleware au lieu d'une route pour éviter tout souci avec path-to-regexp / ordre des routes
+// 2. Fallback SPA : tout le reste (sauf /api, /health, /assets) → index.html
+// Ne jamais renvoyer index.html pour /assets/* (fichiers statiques)
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api/") || req.path === "/health") return next();
-  res.sendFile(path.join(distPath, "index.html"));
+  if (
+    req.path.startsWith("/api/") ||
+    req.path === "/health" ||
+    req.path.startsWith("/assets/")
+  )
+    return next();
+  const indexPath = path.join(distPath, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) next(err);
+  });
 });
 
 app.listen(port, () => {
