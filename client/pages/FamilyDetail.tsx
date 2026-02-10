@@ -1040,7 +1040,7 @@ export default function FamilyDetail() {
                 <select
                   name="aidType"
                   className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
-                  value={addAidPrefillType || categories[0]?.id ?? ""}
+                  value={(addAidPrefillType || categories[0]?.id) ?? ""}
                   onChange={(e) => setAddAidPrefillType(e.target.value)}
                   required
                 >
