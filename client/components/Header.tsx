@@ -23,6 +23,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useCategories } from "@/lib/useCategories";
+import { ROUTES, familyDetailRoute, aidsAddForNeedRoute } from "@/lib/routes";
 
 interface NavItem {
   path: string;
@@ -31,20 +32,20 @@ interface NavItem {
 }
 
 const adminNavItems: NavItem[] = [
-  { path: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
-  { path: "/families", label: "Familles", icon: Users },
-  { path: "/needs", label: "Besoins", icon: AlertTriangle },
-  { path: "/aids", label: "Aides", icon: Gift },
-  { path: "/stock", label: "Stock", icon: Package },
-  { path: "/reports", label: "Rapports", icon: FileBarChart },
-  { path: "/users", label: "Utilisateurs", icon: UserCog },
+  { path: ROUTES.dashboard, label: "Vue d'ensemble", icon: LayoutDashboard },
+  { path: ROUTES.families, label: "Familles", icon: Users },
+  { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
+  { path: ROUTES.aids, label: "Aides", icon: Gift },
+  { path: ROUTES.stock, label: "Stock", icon: Package },
+  { path: ROUTES.reports, label: "Rapports", icon: FileBarChart },
+  { path: ROUTES.users, label: "Utilisateurs", icon: UserCog },
 ];
 
 const volunteerNavItems: NavItem[] = [
-  { path: "/dashboard", label: "Mes actions", icon: ClipboardList },
-  { path: "/families", label: "Familles", icon: Users },
-  { path: "/needs", label: "Besoins", icon: AlertTriangle },
-  { path: "/aids", label: "Aides", icon: Gift },
+  { path: ROUTES.dashboard, label: "Mes actions", icon: ClipboardList },
+  { path: ROUTES.families, label: "Familles", icon: Users },
+  { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
+  { path: ROUTES.aids, label: "Aides", icon: Gift },
 ];
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -97,7 +98,7 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-2">
+          <Link to={ROUTES.dashboard} className="flex items-center gap-2">
             <div className={`p-2 rounded-lg ${isAdmin ? "bg-primary" : "bg-blue-600"}`}>
               <Heart className="w-6 h-6 text-white" />
             </div>
@@ -142,7 +143,7 @@ export default function Header() {
                       {searchResult!.families.slice(0, 5).map((f) => (
                         <Link
                           key={f.id}
-                          to={`/families/${f.id}`}
+                          to={familyDetailRoute(f.id)}
                           onClick={() => {
                             setSearchQuery("");
                             setSearchFocused(false);
@@ -159,53 +160,53 @@ export default function Header() {
                         </div>
                       )}
                       {searchResult!.needs.slice(0, 5).map((n) => (
-                          <div key={n.id} className="flex items-center gap-2">
-                            <Link
-                              to={`/needs`}
-                              onClick={() => {
-                                setSearchQuery("");
-                                setSearchFocused(false);
-                              }}
-                              className="flex-1 px-4 py-2 hover:bg-muted text-sm"
-                            >
-                              {getCategoryLabel(n.type)}
-                              <span className="text-muted-foreground ml-1">
-                                — {(n as { familyName?: string }).familyName ?? "Famille"}
-                              </span>
-                            </Link>
-                            <Link
-                              to={`/aids?action=add&familyId=${n.familyId}&type=${n.type}`}
-                              onClick={() => {
-                                setSearchQuery("");
-                                setSearchFocused(false);
-                              }}
-                              className="px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50 rounded"
-                            >
-                              Répondre
-                            </Link>
-                          </div>
-                        ))}
+                        <div key={n.id} className="flex items-center gap-2">
+                          <Link
+                            to={ROUTES.needs}
+                            onClick={() => {
+                              setSearchQuery("");
+                              setSearchFocused(false);
+                            }}
+                            className="flex-1 px-4 py-2 hover:bg-muted text-sm"
+                          >
+                            {getCategoryLabel(n.type)}
+                            <span className="text-muted-foreground ml-1">
+                              — {(n as { familyName?: string }).familyName ?? "Famille"}
+                            </span>
+                          </Link>
+                          <Link
+                            to={aidsAddForNeedRoute({ familyId: n.familyId, type: n.type })}
+                            onClick={() => {
+                              setSearchQuery("");
+                              setSearchFocused(false);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50 rounded"
+                          >
+                            Répondre
+                          </Link>
+                        </div>
+                      ))}
                       {searchResult!.aids.length > 0 && (
                         <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase mt-2">
                           Aides
                         </div>
                       )}
                       {searchResult!.aids.slice(0, 5).map((a) => (
-                          <Link
-                            key={a.id}
-                            to={`/aids`}
-                            onClick={() => {
-                              setSearchQuery("");
-                              setSearchFocused(false);
-                            }}
-                            className="block px-4 py-2 hover:bg-muted text-sm"
-                          >
-                            {getCategoryLabel(a.type)} x{a.quantity}
-                            <span className="text-muted-foreground ml-1">
-                              — {(a as { familyName?: string }).familyName ?? "Famille"}
-                            </span>
-                          </Link>
-                        ))}
+                        <Link
+                          key={a.id}
+                          to={ROUTES.aids}
+                          onClick={() => {
+                            setSearchQuery("");
+                            setSearchFocused(false);
+                          }}
+                          className="block px-4 py-2 hover:bg-muted text-sm"
+                        >
+                          {getCategoryLabel(a.type)} x{a.quantity}
+                          <span className="text-muted-foreground ml-1">
+                            — {(a as { familyName?: string }).familyName ?? "Famille"}
+                          </span>
+                        </Link>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -305,7 +306,7 @@ export default function Header() {
                     {searchResult!.families.slice(0, 5).map((f) => (
                       <Link
                         key={f.id}
-                        to={`/families/${f.id}`}
+                        to={familyDetailRoute(f.id)}
                         onClick={() => {
                           setSearchQuery("");
                           setSearchFocused(false);
@@ -326,7 +327,7 @@ export default function Header() {
                     {searchResult!.needs.slice(0, 5).map((n) => (
                       <div key={n.id} className="flex items-center gap-2">
                         <Link
-                          to={`/needs`}
+                          to={ROUTES.needs}
                           onClick={() => {
                             setSearchQuery("");
                             setSearchFocused(false);
@@ -339,7 +340,7 @@ export default function Header() {
                           </span>
                         </Link>
                         <Link
-                          to={`/aids?action=add&familyId=${n.familyId}&type=${n.type}`}
+                          to={aidsAddForNeedRoute({ familyId: n.familyId, type: n.type })}
                           onClick={() => {
                             setSearchQuery("");
                             setSearchFocused(false);
@@ -358,7 +359,7 @@ export default function Header() {
                     {searchResult!.aids.slice(0, 5).map((a) => (
                       <Link
                         key={a.id}
-                        to={`/aids`}
+                        to={ROUTES.aids}
                         onClick={() => {
                           setSearchQuery("");
                           setSearchFocused(false);

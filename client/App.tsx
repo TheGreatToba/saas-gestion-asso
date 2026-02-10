@@ -20,6 +20,7 @@ import Stock from "./pages/Stock";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
+import { ROUTES } from "@/lib/routes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,7 +60,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
   const currentUser = user || sessionUser;
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={ROUTES.login} replace />;
   }
 
   return <>{children}</>;
@@ -94,11 +95,11 @@ function AdminRoute({ children }: { children: ReactNode }) {
 
   const currentUser = user || sessionUser;
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={ROUTES.login} replace />;
   }
 
   if (currentUser.role !== "admin") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={ROUTES.dashboard} replace />;
   }
 
   return <>{children}</>;
@@ -113,10 +114,10 @@ export default function App() {
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
+              <Route path={ROUTES.home} element={<Index />} />
+              <Route path={ROUTES.login} element={<Login />} />
               <Route
-                path="/dashboard"
+                path={ROUTES.dashboard}
                 element={
                   <ProtectedRoute>
                     <Dashboard />
@@ -124,7 +125,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/families"
+                path={ROUTES.families}
                 element={
                   <ProtectedRoute>
                     <Families />
@@ -132,7 +133,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/families/:id"
+                path={ROUTES.familyDetail}
                 element={
                   <ProtectedRoute>
                     <FamilyDetail />
@@ -140,7 +141,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/needs"
+                path={ROUTES.needs}
                 element={
                   <ProtectedRoute>
                     <Needs />
@@ -148,7 +149,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/aids"
+                path={ROUTES.aids}
                 element={
                   <ProtectedRoute>
                     <Aids />
@@ -156,7 +157,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/stock"
+                path={ROUTES.stock}
                 element={
                   <ProtectedRoute>
                     <Stock />
@@ -164,7 +165,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/reports"
+                path={ROUTES.reports}
                 element={
                   <AdminRoute>
                     <Reports />
@@ -172,7 +173,7 @@ export default function App() {
                 }
               />
               <Route
-                path="/users"
+                path={ROUTES.users}
                 element={
                   <AdminRoute>
                     <Users />
