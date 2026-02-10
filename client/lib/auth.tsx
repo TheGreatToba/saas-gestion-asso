@@ -52,9 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = (await res.json()) as LoginResponse;
-      setUser(data.user);
-      setSessionToken(data.token);
+
+      // Save session to localStorage and cache BEFORE updating state
       writeSession({ user: data.user, token: data.token });
+      setSessionToken(data.token);
+
+      // Update user state last to trigger re-render
+      setUser(data.user);
+
       return { success: true };
     } catch {
       return { success: false, error: "Erreur réseau" };

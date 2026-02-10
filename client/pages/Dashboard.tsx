@@ -90,8 +90,9 @@ function AdminDashboard() {
 
       {/* Stats Cards */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
-          Impossible de charger les statistiques.
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 mb-6">
+          <p className="font-semibold">Erreur de chargement des statistiques</p>
+          <p className="text-xs mt-1">{error instanceof Error ? error.message : "Une erreur est survenue"}</p>
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

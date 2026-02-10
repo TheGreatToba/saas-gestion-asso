@@ -125,6 +125,15 @@ export function createServer() {
   });
   app.get("/api/demo", handleDemo);
 
+  // Debug: Check if demo users exist
+  app.get("/api/debug/users", (_req, res) => {
+    const users = storage.getAllUsers();
+    res.json({
+      total: users.length,
+      users: users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role }))
+    });
+  });
+
   // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", handleLogin);
 
