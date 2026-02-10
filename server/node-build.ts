@@ -9,12 +9,13 @@ const port = process.env.PORT || 3000;
 const __dirname = import.meta.dirname;
 const distPath = path.join(__dirname, "../spa");
 
-// Serve static files
+// 1. Fichiers statiques (assets, index.html pour "/") — doit rester en premier
 app.use(express.static(distPath));
 
-// Handle React Router - serve index.html for all non-API routes
-// Express 5 / path-to-regexp v8 rejette "*" et "/(.*)", on utilise une RegExp (tout sauf /api/* et /health)
-app.get(/^\/(?!api\/|health$).*/, (req, res) => {
+// 2. Fallback SPA : tout le reste (sauf /api et /health) → index.html
+// Middleware au lieu d'une route pour éviter tout souci avec path-to-regexp / ordre des routes
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path === "/health") return next();
   res.sendFile(path.join(distPath, "index.html"));
 });
 
