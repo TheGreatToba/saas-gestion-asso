@@ -17,6 +17,7 @@ import Needs from "./pages/Needs";
 import Aids from "./pages/Aids";
 import Reports from "./pages/Reports";
 import Stock from "./pages/Stock";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -132,6 +133,14 @@ export default function App() {
                 element={
                   <AdminRoute>
                     <Reports />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <AdminRoute>
+                    <Users />
                   </AdminRoute>
                 }
               />

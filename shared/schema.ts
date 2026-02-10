@@ -10,6 +10,7 @@ export const UserSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   role: UserRole,
+  active: z.boolean().default(true),
 });
 export type User = z.infer<typeof UserSchema>;
 
@@ -18,6 +19,24 @@ export const LoginSchema = z.object({
   password: z.string().min(1, "Mot de passe requis"),
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
+
+export const CreateUserSchema = z.object({
+  name: z.string().min(1, "Nom requis"),
+  email: z.string().email("Email invalide"),
+  role: UserRole.default("volunteer"),
+  password: z.string().min(6, "Mot de passe requis"),
+  active: z.boolean().optional().default(true),
+});
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  role: UserRole.optional(),
+  password: z.string().min(6).optional(),
+  active: z.boolean().optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 
 // ============ CATEGORY (grouping for aid/need types) ============
 
@@ -352,6 +371,7 @@ export const AuditEntityType = z.enum([
   "note",
   "category",
   "article",
+  "user",
 ]);
 export type AuditEntityType = z.infer<typeof AuditEntityType>;
 

@@ -3,6 +3,7 @@ import express, { RequestHandler } from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
 import { handleLogin, handleGetUsers } from "./routes/auth";
+import { handleCreateUser, handleUpdateUser } from "./routes/users";
 import {
   handleGetFamilies,
   handleGetFamily,
@@ -49,6 +50,7 @@ import {
 } from "./routes/articles";
 import { handleSearch } from "./routes/search";
 import { handleGetAuditLogs } from "./routes/audit";
+import { handleImportFamilies } from "./routes/import";
 import {
   handleGetFamilyDocuments,
   handleCreateFamilyDocument,
@@ -82,6 +84,10 @@ const requireAuth: RequestHandler = (req, res, next) => {
     res.status(401).json({ error: "Utilisateur invalide" });
     return;
   }
+  if (!user.active) {
+    res.status(403).json({ error: "Compte désactivé" });
+    return;
+  }
   res.locals.user = user;
   next();
 };
@@ -104,8 +110,8 @@ export function createServer() {
 
   // Middleware
   app.use(cors());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   // Legacy routes (public)
   app.get("/api/ping", (_req, res) => {
@@ -153,8 +159,11 @@ export function createServer() {
 
   // ----- Admin-only routes -----
   app.get("/api/users", requireAuth, requireAdmin, handleGetUsers);
+  app.post("/api/users", requireAuth, requireAdmin, handleCreateUser);
+  app.patch("/api/users/:id", requireAuth, requireAdmin, handleUpdateUser);
   app.get("/api/export", requireAuth, requireAdmin, handleGetExportData);
   app.get("/api/audit-logs", requireAuth, requireAdmin, handleGetAuditLogs);
+  app.post("/api/import/families", requireAuth, requireAdmin, handleImportFamilies);
 
   // Dashboard (authenticated)
   app.get("/api/dashboard/stats", requireAuth, handleGetDashboardStats);
@@ -212,6 +221,15 @@ export function createServer() {
     requireAuth,
     handleDeleteFamilyDocument,
   );
+
+  // Error handler
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error(
+      `[${new Date().toISOString()}] ${req.method} ${req.url}`,
+      err,
+    );
+    res.status(500).json({ error: "Erreur serveur" });
+  });
 
   return app;
 }

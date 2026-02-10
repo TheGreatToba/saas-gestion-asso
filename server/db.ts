@@ -28,7 +28,8 @@ function runMigrations(database: Database.Database): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL
+      role TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS passwords (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -137,7 +138,19 @@ function runMigrations(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_visit_notes_family ON visit_notes(family_id);
     CREATE INDEX IF NOT EXISTS idx_family_documents_family ON family_documents(family_id);
     CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_families_phone ON families(phone);
+    CREATE INDEX IF NOT EXISTS idx_families_responsible ON families(responsible_name);
+    CREATE INDEX IF NOT EXISTS idx_families_neighborhood ON families(neighborhood);
   `);
+
+  // Backfill new columns for existing installations.
+  const userColumns = database
+    .prepare("PRAGMA table_info(users)")
+    .all() as { name: string }[];
+  const hasActive = userColumns.some((col) => col.name === "active");
+  if (!hasActive) {
+    database.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+  }
 }
 
 function now(): string {

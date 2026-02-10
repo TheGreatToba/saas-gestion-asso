@@ -55,7 +55,7 @@ export default function Needs() {
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const { data: needs = [], isLoading } = useQuery({
+  const { data: needs = [], isLoading, error } = useQuery({
     queryKey: ["needs-all"],
     queryFn: api.getNeeds,
   });
@@ -91,6 +91,9 @@ export default function Needs() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast({ title: "Statut mis à jour" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -99,6 +102,9 @@ export default function Needs() {
       queryClient.invalidateQueries({ queryKey: ["needs-all"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast({ title: "Besoin supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -163,7 +169,7 @@ export default function Needs() {
               )}
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto" size="lg">
             <Plus className="w-4 h-4" />
             {isAdmin ? "Nouveau besoin" : "Signaler un besoin"}
           </Button>
@@ -260,6 +266,12 @@ export default function Needs() {
           </div>
         </div>
 
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Impossible de charger les besoins.
+          </div>
+        )}
+
         {/* List */}
         {isLoading ? (
           <div className="space-y-4">
@@ -305,9 +317,11 @@ export default function Needs() {
                         >
                           {PRIORITY_LABELS[need.priorityLevel]}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          (score: {need.priorityScore})
-                        </span>
+                        {isAdmin && (
+                          <span className="text-xs text-muted-foreground">
+                            (score: {need.priorityScore})
+                          </span>
+                        )}
                       </div>
                       {family && (
                         <Link

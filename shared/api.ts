@@ -17,3 +17,10 @@ export interface LoginResponse {
   user: User;
   token: string;
 }
+
+export interface ImportFamiliesResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+}

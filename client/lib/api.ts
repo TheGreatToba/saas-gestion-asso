@@ -42,6 +42,12 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: "Erreur serveur" }));
+    if (res.status === 401 || error.error === "Compte désactivé") {
+      localStorage.removeItem("socialaid_session");
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
     throw new Error(error.error || `Erreur ${res.status}`);
   }
   return res.json();
@@ -198,8 +204,32 @@ export const api = {
   // Users
   getUsers: () => fetchJson<User[]>("/api/users"),
 
+  createUser: (data: import("@shared/schema").CreateUserInput) =>
+    fetchJson<User>("/api/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateUser: (id: string, data: import("@shared/schema").UpdateUserInput) =>
+    fetchJson<User>(`/api/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
   // Export
   getExportData: () => fetchJson<any>("/api/export"),
+
+  importFamilies: (payload: {
+    rows: Partial<CreateFamilyInput>[];
+    duplicateStrategy: "skip" | "update";
+  }) =>
+    fetchJson<import("@shared/api").ImportFamiliesResult>(
+      "/api/import/families",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 
   // Global search
   searchGlobal: (q: string) =>

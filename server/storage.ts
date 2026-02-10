@@ -14,6 +14,8 @@ import type {
   CreateVisitNoteInput,
   CreateCategoryInput,
   CreateArticleInput,
+  CreateUserInput,
+  UpdateUserInput,
   DashboardStats,
   AuditLog,
   FamilyDocument,
@@ -32,13 +34,20 @@ function now(): string {
 }
 
 // --- Row mappers (DB snake_case -> schema camelCase) ---
-type UserRow = { id: string; name: string; email: string; role: string };
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: number;
+};
 function mapUser(r: UserRow): User {
   return {
     id: r.id,
     name: r.name,
     email: r.email,
     role: r.role as User["role"],
+    active: !!r.active,
   };
 }
 
@@ -270,39 +279,107 @@ class Storage {
 
   // ==================== AUTH ====================
 
-  authenticate(email: string, password: string): User | null {
+  authenticate(
+    email: string,
+    password: string,
+  ): { user: User | null; error?: "disabled" } {
     const user = this.db
-      .prepare("SELECT id, name, email, role FROM users WHERE email = ?")
+      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
       .get(email) as UserRow | undefined;
-    if (!user) return null;
+    if (!user) return { user: null };
     const row = this.db
       .prepare("SELECT password FROM passwords WHERE user_id = ?")
       .get(user.id) as { password: string } | undefined;
-    if (!row) return null;
+    if (!row) return { user: null };
     const stored = row.password;
     const valid = verifyPassword(password, stored);
-    if (!valid) return null;
+    if (!valid) return { user: null };
+    if (!user.active) return { user: null, error: "disabled" };
     // Migrate legacy plain-text password to hash on first successful login
     if (!isPasswordHash(stored)) {
       this.db
         .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
         .run(hashPassword(password), user.id);
     }
-    return mapUser(user);
+    return { user: mapUser(user) };
   }
 
   getUser(id: string): User | null {
     const r = this.db
-      .prepare("SELECT id, name, email, role FROM users WHERE id = ?")
+      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
       .get(id) as UserRow | undefined;
     return r ? mapUser(r) : null;
   }
 
   getAllUsers(): User[] {
     const rows = this.db
-      .prepare("SELECT id, name, email, role FROM users")
+      .prepare("SELECT id, name, email, role, active FROM users ORDER BY role DESC, name")
       .all() as UserRow[];
     return rows.map(mapUser);
+  }
+
+  getUserByEmail(email: string): User | null {
+    const r = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
+      .get(email) as UserRow | undefined;
+    return r ? mapUser(r) : null;
+  }
+
+  countActiveAdmins(): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' AND active = 1")
+      .get() as { c: number };
+    return row.c;
+  }
+
+  createUser(input: CreateUserInput): User {
+    const existing = this.db
+      .prepare("SELECT 1 FROM users WHERE email = ?")
+      .get(input.email);
+    if (existing) {
+      throw new Error("Email déjà utilisé");
+    }
+    const id = "usr-" + generateId();
+    this.db
+      .prepare("INSERT INTO users (id, name, email, role, active) VALUES (?, ?, ?, ?, ?)")
+      .run(id, input.name, input.email, input.role, input.active ? 1 : 0);
+    this.db
+      .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
+      .run(id, hashPassword(input.password));
+    return this.getUser(id)!;
+  }
+
+  updateUser(id: string, input: UpdateUserInput): User | null {
+    const current = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
+      .get(id) as UserRow | undefined;
+    if (!current) return null;
+
+    if (input.email && input.email !== current.email) {
+      const existing = this.db
+        .prepare("SELECT 1 FROM users WHERE email = ?")
+        .get(input.email);
+      if (existing) {
+        throw new Error("Email déjà utilisé");
+      }
+    }
+
+    const name = input.name ?? current.name;
+    const email = input.email ?? current.email;
+    const role = input.role ?? (current.role as User["role"]);
+    const active = input.active !== undefined ? (input.active ? 1 : 0) : current.active;
+
+    this.db
+      .prepare("UPDATE users SET name = ?, email = ?, role = ?, active = ? WHERE id = ?")
+      .run(name, email, role, active, id);
+
+    if (input.password) {
+      this.db
+        .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
+        .run(hashPassword(input.password), id);
+    }
+
+    return this.getUser(id);
   }
 
   // ==================== CATEGORIES ====================

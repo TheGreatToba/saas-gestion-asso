@@ -70,37 +70,37 @@ export default function FamilyDetail() {
   const [showAddNote, setShowAddNote] = useState(false);
   const [showAddDocument, setShowAddDocument] = useState(false);
 
-  const { data: family, isLoading: familyLoading } = useQuery({
+  const { data: family, isLoading: familyLoading, error: familyError } = useQuery({
     queryKey: ["family", id],
     queryFn: () => api.getFamily(id!),
     enabled: !!id,
   });
 
-  const { data: children = [] } = useQuery({
+  const { data: children = [], error: childrenError } = useQuery({
     queryKey: ["children", id],
     queryFn: () => api.getChildren(id!),
     enabled: !!id,
   });
 
-  const { data: needs = [] } = useQuery({
+  const { data: needs = [], error: needsError } = useQuery({
     queryKey: ["needs", id],
     queryFn: () => api.getNeedsByFamily(id!),
     enabled: !!id,
   });
 
-  const { data: aids = [] } = useQuery({
+  const { data: aids = [], error: aidsError } = useQuery({
     queryKey: ["aids", id],
     queryFn: () => api.getAidsByFamily(id!),
     enabled: !!id,
   });
 
-  const { data: notes = [] } = useQuery({
+  const { data: notes = [], error: notesError } = useQuery({
     queryKey: ["notes", id],
     queryFn: () => api.getNotes(id!),
     enabled: !!id,
   });
 
-  const { data: documents = [] } = useQuery({
+  const { data: documents = [], error: documentsError } = useQuery({
     queryKey: ["documents", id],
     queryFn: () => api.getFamilyDocuments(id!),
     enabled: !!id,
@@ -125,6 +125,9 @@ export default function FamilyDetail() {
       setShowAddChild(false);
       toast({ title: "Enfant ajouté" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const deleteChildMutation = useMutation({
@@ -132,6 +135,9 @@ export default function FamilyDetail() {
     onSuccess: () => {
       invalidateAll();
       toast({ title: "Enfant supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -142,6 +148,9 @@ export default function FamilyDetail() {
       setShowAddNeed(false);
       toast({ title: "Besoin ajouté" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const updateNeedMutation = useMutation({
@@ -150,6 +159,9 @@ export default function FamilyDetail() {
     onSuccess: () => {
       invalidateAll();
       toast({ title: "Statut mis à jour" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -160,6 +172,9 @@ export default function FamilyDetail() {
       setShowAddAid(false);
       toast({ title: "Aide enregistrée" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const addNoteMutation = useMutation({
@@ -169,6 +184,9 @@ export default function FamilyDetail() {
       invalidateAll();
       setShowAddNote(false);
       toast({ title: "Note ajoutée" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -190,6 +208,9 @@ export default function FamilyDetail() {
     onSuccess: () => {
       invalidateAll();
       toast({ title: "Document supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -251,6 +272,11 @@ export default function FamilyDetail() {
       <Header />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {(familyError || childrenError || needsError || aidsError || notesError || documentsError) && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Certaines données n'ont pas pu être chargées. Réessayez.
+          </div>
+        )}
         {/* Back + Header */}
         <Link
           to="/families"
@@ -323,9 +349,36 @@ export default function FamilyDetail() {
           </div>
         </div>
 
+        {/* Quick actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <Button
+            className="gap-2 bg-green-600 hover:bg-green-700"
+            onClick={() => setShowAddAid(true)}
+          >
+            <Gift className="w-4 h-4" />
+            Enregistrer une aide
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowAddNeed(true)}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Ajouter un besoin
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowAddNote(true)}
+          >
+            <FileText className="w-4 h-4" />
+            Ajouter une note
+          </Button>
+        </div>
+
         {/* Tabs */}
         <Tabs defaultValue="timeline" className="space-y-6">
-          <TabsList className="grid grid-cols-6 w-full max-w-3xl">
+          <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full max-w-3xl">
             <TabsTrigger value="timeline">Historique</TabsTrigger>
             <TabsTrigger value="children">
               Enfants ({children.length})

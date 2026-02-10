@@ -12,14 +12,18 @@ export const handleLogin: RequestHandler = (req, res) => {
     return;
   }
 
-  const user = storage.authenticate(parsed.data.email, parsed.data.password);
-  if (!user) {
+  const result = storage.authenticate(parsed.data.email, parsed.data.password);
+  if (!result.user) {
+    if (result.error === "disabled") {
+      res.status(403).json({ error: "Compte désactivé" });
+      return;
+    }
     res.status(401).json({ error: "Email ou mot de passe incorrect" });
     return;
   }
 
-  const token = createAuthToken(user.id);
-  res.json({ user, token });
+  const token = createAuthToken(result.user.id);
+  res.json({ user: result.user, token });
 };
 
 export const handleGetUsers: RequestHandler = (_req, res) => {

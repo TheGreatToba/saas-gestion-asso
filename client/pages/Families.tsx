@@ -62,7 +62,7 @@ export default function Families() {
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
   const [form, setForm] = useState<CreateFamilyInput>(emptyForm);
 
-  const { data: families = [], isLoading } = useQuery({
+  const { data: families = [], isLoading, error } = useQuery({
     queryKey: ["families", search],
     queryFn: () => api.getFamilies(search || undefined),
   });
@@ -106,6 +106,9 @@ export default function Families() {
       queryClient.invalidateQueries({ queryKey: ["families"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast({ title: "Famille supprimée" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -156,7 +159,7 @@ export default function Families() {
                 : "Consultez et mettez à jour les informations des familles"}
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto" size="lg">
             <Plus className="w-4 h-4" />
             Nouvelle famille
           </Button>
@@ -172,6 +175,12 @@ export default function Families() {
             className="pl-10"
           />
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Impossible de charger les familles.
+          </div>
+        )}
 
         {medicalFilter && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
@@ -312,7 +321,7 @@ export default function Families() {
 
         {/* Create/Edit Dialog */}
         <Dialog open={showForm || !!editingFamily} onOpenChange={closeDialog}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingFamily ? "Modifier la famille" : "Nouvelle famille"}
@@ -328,6 +337,7 @@ export default function Families() {
                   }
                   placeholder="Nom complet"
                   required
+                  autoComplete="name"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -338,6 +348,8 @@ export default function Families() {
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="06 XX XX XX XX"
                     required
+                    inputMode="tel"
+                    autoComplete="tel"
                   />
                 </div>
                 <div className="space-y-2">
@@ -361,6 +373,7 @@ export default function Families() {
                   }
                   placeholder="Adresse complète"
                   required
+                  autoComplete="street-address"
                 />
               </div>
               <div className="grid grid-cols-3 gap-4">
