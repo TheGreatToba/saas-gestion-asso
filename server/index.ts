@@ -10,13 +10,43 @@ import {
   handleUpdateFamily,
   handleDeleteFamily,
 } from "./routes/families";
-import { handleGetChildren, handleCreateChild, handleUpdateChild, handleDeleteChild } from "./routes/children";
-import { handleGetNeeds, handleGetNeedsByFamily, handleCreateNeed, handleUpdateNeed, handleDeleteNeed } from "./routes/needs";
-import { handleGetAids, handleGetAidsByFamily, handleCreateAid } from "./routes/aids";
+import {
+  handleGetChildren,
+  handleCreateChild,
+  handleUpdateChild,
+  handleDeleteChild,
+} from "./routes/children";
+import {
+  handleGetNeeds,
+  handleGetNeedsByFamily,
+  handleCreateNeed,
+  handleUpdateNeed,
+  handleDeleteNeed,
+} from "./routes/needs";
+import {
+  handleGetAids,
+  handleGetAidsByFamily,
+  handleCreateAid,
+} from "./routes/aids";
 import { handleGetNotes, handleCreateNote } from "./routes/notes";
-import { handleGetDashboardStats, handleGetExportData } from "./routes/dashboard";
-import { handleGetCategories, handleCreateCategory, handleUpdateCategory, handleDeleteCategory } from "./routes/categories";
-import { handleGetAllArticles, handleGetArticlesByCategory, handleCreateArticle, handleUpdateArticle, handleDeleteArticle, handleAdjustArticleStock } from "./routes/articles";
+import {
+  handleGetDashboardStats,
+  handleGetExportData,
+} from "./routes/dashboard";
+import {
+  handleGetCategories,
+  handleCreateCategory,
+  handleUpdateCategory,
+  handleDeleteCategory,
+} from "./routes/categories";
+import {
+  handleGetAllArticles,
+  handleGetArticlesByCategory,
+  handleCreateArticle,
+  handleUpdateArticle,
+  handleDeleteArticle,
+  handleAdjustArticleStock,
+} from "./routes/articles";
 import { handleSearch } from "./routes/search";
 import { handleGetAuditLogs } from "./routes/audit";
 import {
@@ -25,20 +55,29 @@ import {
   handleDeleteFamilyDocument,
 } from "./routes/documents";
 import { storage } from "./storage";
+import { verifyAuthToken } from "./auth-token";
 
 // ---------- Auth Middleware ----------
 
 /**
- * Requires a valid user ID in the x-user-id header.
+ * Requires a valid bearer token in Authorization header.
  * Attaches the user to res.locals.user.
  */
 const requireAuth: RequestHandler = (req, res, next) => {
-  const userId = req.headers["x-user-id"] as string | undefined;
-  if (!userId) {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  if (!token) {
     res.status(401).json({ error: "Authentification requise" });
     return;
   }
-  const user = storage.getUser(userId);
+
+  const payload = verifyAuthToken(token);
+  if (!payload) {
+    res.status(401).json({ error: "Session invalide ou expirée" });
+    return;
+  }
+
+  const user = storage.getUser(payload.userId);
   if (!user) {
     res.status(401).json({ error: "Utilisateur invalide" });
     return;
@@ -81,16 +120,36 @@ export function createServer() {
   // Categories (public read, admin write)
   app.get("/api/categories", handleGetCategories);
   app.post("/api/categories", requireAuth, requireAdmin, handleCreateCategory);
-  app.put("/api/categories/:id", requireAuth, requireAdmin, handleUpdateCategory);
-  app.delete("/api/categories/:id", requireAuth, requireAdmin, handleDeleteCategory);
+  app.put(
+    "/api/categories/:id",
+    requireAuth,
+    requireAdmin,
+    handleUpdateCategory,
+  );
+  app.delete(
+    "/api/categories/:id",
+    requireAuth,
+    requireAdmin,
+    handleDeleteCategory,
+  );
 
   // Articles (public read, admin write)
   app.get("/api/articles", handleGetAllArticles);
   app.get("/api/categories/:categoryId/articles", handleGetArticlesByCategory);
   app.post("/api/articles", requireAuth, requireAdmin, handleCreateArticle);
   app.put("/api/articles/:id", requireAuth, requireAdmin, handleUpdateArticle);
-  app.delete("/api/articles/:id", requireAuth, requireAdmin, handleDeleteArticle);
-  app.patch("/api/articles/:id/stock", requireAuth, requireAdmin, handleAdjustArticleStock);
+  app.delete(
+    "/api/articles/:id",
+    requireAuth,
+    requireAdmin,
+    handleDeleteArticle,
+  );
+  app.patch(
+    "/api/articles/:id/stock",
+    requireAuth,
+    requireAdmin,
+    handleAdjustArticleStock,
+  );
 
   // ----- Admin-only routes -----
   app.get("/api/users", requireAuth, requireAdmin, handleGetUsers);
@@ -108,7 +167,12 @@ export function createServer() {
   app.post("/api/families", requireAuth, handleCreateFamily);
   app.get("/api/families/:id", requireAuth, handleGetFamily);
   app.put("/api/families/:id", requireAuth, handleUpdateFamily);
-  app.delete("/api/families/:id", requireAuth, requireAdmin, handleDeleteFamily);
+  app.delete(
+    "/api/families/:id",
+    requireAuth,
+    requireAdmin,
+    handleDeleteFamily,
+  );
 
   // Children (authenticated, delete = admin only)
   app.get("/api/families/:familyId/children", requireAuth, handleGetChildren);
@@ -133,9 +197,21 @@ export function createServer() {
   app.post("/api/families/:familyId/notes", requireAuth, handleCreateNote);
 
   // Family Documents (authenticated)
-  app.get("/api/families/:familyId/documents", requireAuth, handleGetFamilyDocuments);
-  app.post("/api/families/:familyId/documents", requireAuth, handleCreateFamilyDocument);
-  app.delete("/api/families/:familyId/documents/:documentId", requireAuth, handleDeleteFamilyDocument);
+  app.get(
+    "/api/families/:familyId/documents",
+    requireAuth,
+    handleGetFamilyDocuments,
+  );
+  app.post(
+    "/api/families/:familyId/documents",
+    requireAuth,
+    handleCreateFamilyDocument,
+  );
+  app.delete(
+    "/api/families/:familyId/documents/:documentId",
+    requireAuth,
+    handleDeleteFamilyDocument,
+  );
 
   return app;
 }
