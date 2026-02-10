@@ -10,3 +10,10 @@
 export interface DemoResponse {
   message: string;
 }
+
+import type { User } from "./schema";
+
+export interface LoginResponse {
+  user: User;
+  token: string;
+}

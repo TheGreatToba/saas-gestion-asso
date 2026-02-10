@@ -18,13 +18,12 @@ import type {
   CreateArticleInput,
 } from "@shared/schema";
 
-function getStoredUserId(): string | undefined {
+function getStoredToken(): string | undefined {
   try {
-    const stored = localStorage.getItem("socialaid_user");
-    if (stored) {
-      const user = JSON.parse(stored);
-      return user?.id;
-    }
+    const stored = localStorage.getItem("socialaid_session");
+    if (!stored) return undefined;
+    const session = JSON.parse(stored) as { token?: string };
+    return session?.token;
   } catch {
     // ignore
   }
@@ -32,12 +31,12 @@ function getStoredUserId(): string | undefined {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const userId = getStoredUserId();
+  const token = getStoredToken();
   const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(userId ? { "x-user-id": userId } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
@@ -83,7 +82,10 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  updateArticle: (id: string, data: Partial<Omit<CreateArticleInput, "categoryId">>) =>
+  updateArticle: (
+    id: string,
+    data: Partial<Omit<CreateArticleInput, "categoryId">>,
+  ) =>
     fetchJson<Article>(`/api/articles/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -105,7 +107,11 @@ export const api = {
 
   // Families
   getFamilies: (search?: string) =>
-    fetchJson<Family[]>(search ? `/api/families?search=${encodeURIComponent(search)}` : "/api/families"),
+    fetchJson<Family[]>(
+      search
+        ? `/api/families?search=${encodeURIComponent(search)}`
+        : "/api/families",
+    ),
 
   getFamily: (id: string) => fetchJson<Family>(`/api/families/${id}`),
 
@@ -180,7 +186,10 @@ export const api = {
   getNotes: (familyId: string) =>
     fetchJson<VisitNote[]>(`/api/families/${familyId}/notes`),
 
-  createNote: (familyId: string, data: Omit<CreateVisitNoteInput, "familyId">) =>
+  createNote: (
+    familyId: string,
+    data: Omit<CreateVisitNoteInput, "familyId">,
+  ) =>
     fetchJson<VisitNote>(`/api/families/${familyId}/notes`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -195,28 +204,36 @@ export const api = {
   // Global search
   searchGlobal: (q: string) =>
     fetchJson<{ families: Family[]; needs: Need[]; aids: Aid[] }>(
-      `/api/search?q=${encodeURIComponent(q)}`
+      `/api/search?q=${encodeURIComponent(q)}`,
     ),
 
   // Audit log (admin)
   getAuditLogs: (limit?: number) =>
     fetchJson<import("@shared/schema").AuditLog[]>(
-      limit ? `/api/audit-logs?limit=${limit}` : "/api/audit-logs"
+      limit ? `/api/audit-logs?limit=${limit}` : "/api/audit-logs",
     ),
 
   // Family documents
   getFamilyDocuments: (familyId: string) =>
     fetchJson<import("@shared/schema").FamilyDocument[]>(
-      `/api/families/${familyId}/documents`
+      `/api/families/${familyId}/documents`,
     ),
-  createFamilyDocument: (familyId: string, data: { name: string; documentType: string; fileData: string; mimeType: string }) =>
+  createFamilyDocument: (
+    familyId: string,
+    data: {
+      name: string;
+      documentType: string;
+      fileData: string;
+      mimeType: string;
+    },
+  ) =>
     fetchJson<import("@shared/schema").FamilyDocument>(
       `/api/families/${familyId}/documents`,
-      { method: "POST", body: JSON.stringify({ ...data, familyId }) }
+      { method: "POST", body: JSON.stringify({ ...data, familyId }) },
     ),
   deleteFamilyDocument: (familyId: string, documentId: string) =>
     fetchJson<{ success: boolean }>(
       `/api/families/${familyId}/documents/${documentId}`,
-      { method: "DELETE" }
+      { method: "DELETE" },
     ),
 };
