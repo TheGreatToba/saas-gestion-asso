@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,10 +57,18 @@ export default function Families() {
   const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
   const [form, setForm] = useState<CreateFamilyInput>(emptyForm);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   const { data: families = [], isLoading, error } = useQuery({
     queryKey: ["families", search],
@@ -170,8 +178,8 @@ export default function Families() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher par nom, quartier, foyer, téléphone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10"
           />
         </div>
@@ -382,6 +390,7 @@ export default function Families() {
                   <Input
                     type="number"
                     min={1}
+                    inputMode="numeric"
                     value={form.memberCount}
                     onChange={(e) =>
                       setForm({
@@ -396,6 +405,7 @@ export default function Families() {
                   <Input
                     type="number"
                     min={0}
+                    inputMode="numeric"
                     value={form.childrenCount}
                     onChange={(e) =>
                       setForm({
