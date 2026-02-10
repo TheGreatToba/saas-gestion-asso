@@ -22,13 +22,9 @@ import { getSessionToken, clearSession } from "@/lib/session";
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getSessionToken();
 
-  // Log pour debug
-  if (typeof window !== 'undefined' && !token) {
-    console.warn(`[API] No token for request to ${url}`);
-  }
-
   const res = await fetch(url, {
     ...options,
+    credentials: "include", // envoie le cookie auth_token (auth principale)
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -39,13 +35,14 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: "Erreur serveur" }));
 
-    // Log for debugging
-    console.error(`[API] Error ${res.status} from ${url}:`, error);
-
     if (res.status === 401 || error.error === "Compte désactivé") {
       clearSession();
-      // Don't redirect here - let React Router handle it
-      // The component will re-render and ProtectedRoute will redirect
+    }
+    if (res.status === 404) {
+      throw new Error(
+        error.error ||
+          "Service non trouvé. Lancez l’application avec « pnpm dev » (client + API sur le même serveur)."
+      );
     }
     throw new Error(error.error || `Erreur ${res.status}`);
   }

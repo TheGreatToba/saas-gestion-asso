@@ -55,8 +55,17 @@ function expressPlugin(): Plugin {
     configureServer(server) {
       const app = createServer();
 
-      // Add Express app as middleware to Vite dev server
-      server.middlewares.use(app);
+      // Déléguer /api et /health à Express en premier (évite 404 Vite sur /api/*).
+      const apiPrefix = "/api";
+      const healthPath = "/health";
+      const handle = (req: any, res: any, next: () => void) => {
+        const path = req.url?.split("?")[0] ?? "";
+        if (path.startsWith(apiPrefix) || path === healthPath) {
+          return app(req, res, next);
+        }
+        next();
+      };
+      (server.middlewares as any).stack.unshift({ route: "", handle });
     },
   };
 }
