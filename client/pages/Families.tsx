@@ -166,7 +166,7 @@ export default function Families() {
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher par nom, quartier, téléphone..."
+            placeholder="Rechercher par nom, quartier, foyer, téléphone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -211,13 +211,18 @@ export default function Families() {
               >
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <Link
                         to={`/families/${family.id}`}
                         className="text-lg font-semibold text-foreground hover:text-primary transition truncate"
                       >
                         {family.responsibleName}
                       </Link>
+                      <span className="text-muted-foreground font-normal text-base">
+                        {(family.housing === "housed" || family.housing === "pending_placement") && family.housingName
+                          ? family.housingName
+                          : family.neighborhood}
+                      </span>
                       <Badge
                         variant="outline"
                         className={`shrink-0 ${
@@ -229,7 +234,6 @@ export default function Families() {
                         }`}
                       >
                         {FAMILY_HOUSING_LABELS[family.housing]}
-                        {family.housingName && ` — ${family.housingName}`}
                       </Badge>
                       {family.hasMedicalNeeds && (
                         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">

@@ -438,6 +438,7 @@ class Storage {
       (f) =>
         f.responsibleName.toLowerCase().includes(q) ||
         f.neighborhood.toLowerCase().includes(q) ||
+        (f.housingName || "").toLowerCase().includes(q) ||
         f.address.toLowerCase().includes(q) ||
         f.phone.includes(q)
     );
