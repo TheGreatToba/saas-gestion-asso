@@ -25,4 +25,8 @@ dist-ssr
 *.sw?
 
 .config/
-!.env
+
+# Ne jamais committer les secrets (AUTH_SECRET, etc.)
+.env
+.env.local
+.env.*.local
