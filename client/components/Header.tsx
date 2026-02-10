@@ -110,7 +110,12 @@ export default function Header() {
           </Link>
 
           {/* Global search (desktop) */}
-          <div className="hidden md:block flex-1 max-w-xs mx-4" ref={searchRef}>
+          <div
+            className={`hidden md:block flex-1 mx-4 transition-all duration-200 ${
+              searchFocused ? "max-w-2xl" : "max-w-xs"
+            }`}
+            ref={searchRef}
+          >
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
