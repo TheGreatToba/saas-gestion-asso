@@ -271,6 +271,10 @@ export const api = {
       `/api/families/${familyId}/documents`,
       { method: "POST", body: JSON.stringify({ ...data, familyId }) },
     ),
+  getFamilyDocumentDownloadUrl: (familyId: string, documentId: string) =>
+    fetchJson<{ url: string; expiresInSeconds: number }>(
+      `/api/families/${familyId}/documents/${documentId}/download`,
+    ),
   deleteFamilyDocument: (familyId: string, documentId: string) =>
     fetchJson<{ success: boolean }>(
       `/api/families/${familyId}/documents/${documentId}`,

@@ -126,11 +126,14 @@ function runMigrations(database: Database.Database): void {
       family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       document_type TEXT NOT NULL,
+      -- Données brutes (base64) historique, non utilisées pour les nouveaux uploads.
       file_data TEXT NOT NULL,
       mime_type TEXT NOT NULL,
       uploaded_at TEXT NOT NULL,
       uploaded_by TEXT NOT NULL,
-      uploaded_by_name TEXT NOT NULL
+      uploaded_by_name TEXT NOT NULL,
+      -- Clé d'objet dans le stockage (S3 / MinIO / Azure Blob...)
+      file_key TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_children_family ON children(family_id);
     CREATE INDEX IF NOT EXISTS idx_needs_family ON needs(family_id);
@@ -150,6 +153,15 @@ function runMigrations(database: Database.Database): void {
   const hasActive = userColumns.some((col) => col.name === "active");
   if (!hasActive) {
     database.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+  }
+
+  // Ajout rétro-compatible de la colonne file_key pour les installations existantes.
+  const familyDocumentColumns = database
+    .prepare("PRAGMA table_info(family_documents)")
+    .all() as { name: string }[];
+  const hasFileKey = familyDocumentColumns.some((col) => col.name === "file_key");
+  if (!hasFileKey) {
+    database.exec("ALTER TABLE family_documents ADD COLUMN file_key TEXT;");
   }
 }
 

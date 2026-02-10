@@ -725,11 +725,11 @@ export default function FamilyDetail() {
                   Ajouter
                 </Button>
               </div>
-              {documents.length === 0 ? (
+                  {documents.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Aucun document enregistré
                 </p>
-              ) : (
+                  ) : (
                 <div className="grid gap-3">
                   {documents.map((doc) => (
                     <div
@@ -744,14 +744,41 @@ export default function FamilyDetail() {
                             {FAMILY_DOCUMENT_TYPE_LABELS[doc.documentType]} — {doc.uploadedByName} — {format(new Date(doc.uploadedAt), "d MMM yyyy", { locale: fr })}
                           </p>
                         </div>
-                        <a
-                          href={doc.fileData.startsWith("data:") ? doc.fileData : `data:${doc.mimeType};base64,${doc.fileData}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline shrink-0"
-                        >
-                          Voir
-                        </a>
+                        {doc.downloadUrl ? (
+                          <a
+                            href={doc.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline shrink-0"
+                          >
+                            Voir
+                          </a>
+                        ) : (
+                          <Button
+                            variant="link"
+                            className="text-sm text-primary px-0 shrink-0"
+                            onClick={async () => {
+                              if (!id) return;
+                              try {
+                                const { url } = await api.getFamilyDocumentDownloadUrl(
+                                  id,
+                                  doc.id,
+                                );
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              } catch (err) {
+                                console.error(err);
+                                toast({
+                                  title: "Erreur",
+                                  description:
+                                    "Impossible de générer le lien de téléchargement du document.",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                          >
+                            Voir
+                          </Button>
+                        )}
                       </div>
                       {isAdmin && (
                         <Button

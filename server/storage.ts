@@ -252,11 +252,12 @@ type FamilyDocumentRow = {
   family_id: string;
   name: string;
   document_type: string;
-  file_data: string;
+  file_data: string | null;
   mime_type: string;
   uploaded_at: string;
   uploaded_by: string;
   uploaded_by_name: string;
+  file_key: string | null;
 };
 function mapFamilyDocument(r: FamilyDocumentRow): FamilyDocument {
   return {
@@ -264,17 +265,25 @@ function mapFamilyDocument(r: FamilyDocumentRow): FamilyDocument {
     familyId: r.family_id,
     name: r.name,
     documentType: r.document_type as FamilyDocument["documentType"],
-    fileData: r.file_data,
+    fileKey: r.file_key ?? "",
     mimeType: r.mime_type,
     uploadedAt: r.uploaded_at,
     uploadedBy: r.uploaded_by,
     uploadedByName: r.uploaded_by_name,
+    // URL signée ajoutée au niveau des routes (non stockée en base)
+    downloadUrl: undefined,
   };
 }
 
 class Storage {
+  private testDb?: Database.Database;
+
+  constructor(testDb?: Database.Database) {
+    this.testDb = testDb;
+  }
+
   private get db(): Database.Database {
-    return getDb();
+    return this.testDb ?? getDb();
   }
 
   // ==================== AUTH ====================
@@ -678,37 +687,65 @@ class Storage {
   } {
     const q = query.trim().toLowerCase();
     if (!q) return { families: [], needs: [], aids: [] };
+    
     const categoryLabels = this.getCategoryLabels();
     const families = this.searchFamilies(query);
-    const familyIds = new Set(families.map((f) => f.id));
-
     const like = `%${q.replace(/%/g, "\\%")}%`;
 
+    // Trouver les IDs de catégories dont le nom correspond à la requête
+    const matchingCategoryIds = Object.entries(categoryLabels)
+      .filter(([_, label]) => label.toLowerCase().includes(q))
+      .map(([id]) => id);
+
+    // Construire les conditions de recherche pour needs
+    const needConditions: string[] = [];
+    const needParams: unknown[] = [];
+
+    // Condition sur les familles (seulement si des familles sont trouvées)
+    if (families.length > 0) {
+      needConditions.push(`family_id IN (${families.map(() => "?").join(",")})`);
+      needParams.push(...families.map((f) => f.id));
+    }
+
+    // Condition sur les labels de catégories (seulement si des catégories correspondent)
+    if (matchingCategoryIds.length > 0) {
+      needConditions.push(`type IN (${matchingCategoryIds.map(() => "?").join(",")})`);
+      needParams.push(...matchingCategoryIds);
+    }
+
+    // Conditions sur les commentaires et détails
+    needConditions.push("lower(comment) LIKE ?");
+    needConditions.push("lower(details) LIKE ?");
+    needParams.push(like, like);
+
     const needs = this.db
-      .prepare(
-        `SELECT * FROM needs
-         WHERE family_id IN (${families.length ? families.map(() => "?").join(",") : "NULL"})
-           OR lower(comment) LIKE ?
-           OR lower(details) LIKE ?`,
-      )
-      .all(
-        ...families.map((f) => f.id),
-        like,
-        like,
-      ) as NeedRow[];
+      .prepare(`SELECT * FROM needs WHERE ${needConditions.join(" OR ")}`)
+      .all(...needParams) as NeedRow[];
+
+    // Construire les conditions de recherche pour aids
+    const aidConditions: string[] = [];
+    const aidParams: unknown[] = [];
+
+    // Condition sur les familles (seulement si des familles sont trouvées)
+    if (families.length > 0) {
+      aidConditions.push(`family_id IN (${families.map(() => "?").join(",")})`);
+      aidParams.push(...families.map((f) => f.id));
+    }
+
+    // Condition sur les labels de catégories (seulement si des catégories correspondent)
+    if (matchingCategoryIds.length > 0) {
+      aidConditions.push(`type IN (${matchingCategoryIds.map(() => "?").join(",")})`);
+      aidParams.push(...matchingCategoryIds);
+    }
+
+    // Conditions sur le nom du bénévole et les notes
+    aidConditions.push("lower(volunteer_name) LIKE ?");
+    aidConditions.push("lower(notes) LIKE ?");
+    aidParams.push(like, like);
 
     const aids = this.db
-      .prepare(
-        `SELECT * FROM aids
-         WHERE family_id IN (${families.length ? families.map(() => "?").join(",") : "NULL"})
-           OR lower(volunteer_name) LIKE ?
-           OR lower(notes) LIKE ?`,
-      )
-      .all(
-        ...families.map((f) => f.id),
-        like,
-        like,
-      ) as AidRow[];
+      .prepare(`SELECT * FROM aids WHERE ${aidConditions.join(" OR ")}`)
+      .all(...aidParams) as AidRow[];
 
     return {
       families,
@@ -1167,40 +1204,55 @@ class Storage {
     return rows.map(mapFamilyDocument);
   }
 
-  createFamilyDocument(
-    input: CreateFamilyDocumentInput & {
-      uploadedBy: string;
-      uploadedByName: string;
-    },
-  ): FamilyDocument {
+  /**
+   * Crée uniquement l'enregistrement de document en base, en supposant que
+   * le fichier lui-même a déjà été envoyé dans le stockage objet.
+   */
+  createFamilyDocumentRecord(input: {
+    familyId: string;
+    name: string;
+    documentType: CreateFamilyDocumentInput["documentType"];
+    mimeType: string;
+    fileKey: string;
+    uploadedBy: string;
+    uploadedByName: string;
+  }): FamilyDocument {
     const id = "doc-" + generateId();
     const uploadedAt = now();
     this.db
       .prepare(
-        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name, file_key) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?)",
       )
       .run(
         id,
         input.familyId,
         input.name,
         input.documentType,
-        input.fileData,
         input.mimeType,
         uploadedAt,
         input.uploadedBy,
         input.uploadedByName,
+        input.fileKey,
       );
     return mapFamilyDocument({
       id,
       family_id: input.familyId,
       name: input.name,
       document_type: input.documentType,
-      file_data: input.fileData,
+      file_data: "",
       mime_type: input.mimeType,
       uploaded_at: uploadedAt,
       uploaded_by: input.uploadedBy,
       uploaded_by_name: input.uploadedByName,
+      file_key: input.fileKey,
     });
+  }
+
+  getFamilyDocument(id: string): FamilyDocument | null {
+    const row = this.db
+      .prepare("SELECT * FROM family_documents WHERE id = ?")
+      .get(id) as FamilyDocumentRow | undefined;
+    return row ? mapFamilyDocument(row) : null;
   }
 
   deleteFamilyDocument(id: string): boolean {
@@ -1211,4 +1263,5 @@ class Storage {
   }
 }
 
+export { Storage };
 export const storage = new Storage();

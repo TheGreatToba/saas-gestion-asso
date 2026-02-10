@@ -403,11 +403,17 @@ export const FamilyDocumentSchema = z.object({
   familyId: z.string(),
   name: z.string(),
   documentType: FamilyDocumentType,
-  fileData: z.string(), // base64
+  // Clé opaque d'objet dans le stockage (S3 / MinIO / Azure Blob...)
+  fileKey: z.string(),
   mimeType: z.string(),
   uploadedAt: z.string(),
   uploadedBy: z.string(),
   uploadedByName: z.string(),
+  /**
+   * URL signée courte durée pour téléchargement direct.
+   * Non stockée en base, générée à la volée côté API.
+   */
+  downloadUrl: z.string().optional(),
 });
 export type FamilyDocument = z.infer<typeof FamilyDocumentSchema>;
 
@@ -415,6 +421,10 @@ export const CreateFamilyDocumentSchema = z.object({
   familyId: z.string(),
   name: z.string().min(1),
   documentType: FamilyDocumentType,
+  /**
+   * Charge utile brute envoyée par le client.
+   * Actuellement: Data URL (data:mime;base64,...) ou base64 brut.
+   */
   fileData: z.string(),
   mimeType: z.string(),
 });

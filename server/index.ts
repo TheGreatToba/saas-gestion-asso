@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { RequestHandler } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { handleDemo } from "./routes/demo";
 import { handleLogin, handleGetUsers } from "./routes/auth";
 import { handleCreateUser, handleUpdateUser } from "./routes/users";
@@ -55,6 +56,7 @@ import {
   handleGetFamilyDocuments,
   handleCreateFamilyDocument,
   handleDeleteFamilyDocument,
+  handleGetFamilyDocumentDownloadUrl,
 } from "./routes/documents";
 import { storage } from "./storage";
 import { verifyAuthToken } from "./auth-token";
@@ -147,6 +149,7 @@ export function createServer() {
   );
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(cookieParser());
 
   // Health check (for load balancers)
   app.get("/health", (_req, res) => {
@@ -263,6 +266,12 @@ export function createServer() {
     requireAuth,
     requireAdmin,
     handleDeleteFamilyDocument,
+  );
+  app.get(
+    "/api/families/:familyId/documents/:documentId/download",
+    requireAuth,
+    requireAdmin,
+    handleGetFamilyDocumentDownloadUrl,
   );
 
   // Error handler
