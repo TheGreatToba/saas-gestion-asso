@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
   X,
@@ -13,10 +13,15 @@ import {
   Shield,
   ClipboardList,
   Package,
+  Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useCategories } from "@/lib/useCategories";
 
 interface NavItem {
   path: string;
@@ -40,10 +45,46 @@ const volunteerNavItems: NavItem[] = [
   { path: "/aids", label: "Aides", icon: Gift },
 ];
 
+const SEARCH_DEBOUNCE_MS = 300;
+
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { getCategoryLabel } = useCategories();
+
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data: searchResult, isLoading: searchLoading } = useQuery({
+    queryKey: ["search", debouncedQ],
+    queryFn: () => api.searchGlobal(debouncedQ),
+    enabled: debouncedQ.length >= 2,
+  });
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const showDropdown = searchFocused && debouncedQ.length >= 2;
+  const hasResults =
+    searchResult &&
+    (searchResult.families.length > 0 ||
+      searchResult.needs.length > 0 ||
+      searchResult.aids.length > 0);
 
   const navItems = isAdmin ? adminNavItems : volunteerNavItems;
 
@@ -63,6 +104,105 @@ export default function Header() {
               </p>
             </div>
           </Link>
+
+          {/* Global search (desktop) */}
+          <div className="hidden md:block flex-1 max-w-xs mx-4" ref={searchRef}>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Rechercher familles, besoins, aides..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                className="pl-8 h-9 bg-muted/50"
+              />
+              {showDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[70vh] overflow-y-auto">
+                  {searchLoading ? (
+                    <div className="p-4 text-sm text-muted-foreground">Recherche...</div>
+                  ) : !hasResults ? (
+                    <div className="p-4 text-sm text-muted-foreground">Aucun résultat</div>
+                  ) : (
+                    <div className="py-2">
+                      {searchResult!.families.length > 0 && (
+                        <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase">
+                          Familles
+                        </div>
+                      )}
+                      {searchResult!.families.slice(0, 5).map((f) => (
+                        <Link
+                          key={f.id}
+                          to={`/families/${f.id}`}
+                          onClick={() => {
+                            setSearchQuery("");
+                            setSearchFocused(false);
+                          }}
+                          className="block px-4 py-2 hover:bg-muted text-sm"
+                        >
+                          {f.responsibleName}
+                          <span className="text-muted-foreground ml-1">— {f.neighborhood}</span>
+                        </Link>
+                      ))}
+                      {searchResult!.needs.length > 0 && (
+                        <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase mt-2">
+                          Besoins
+                        </div>
+                      )}
+                      {searchResult!.needs.slice(0, 5).map((n) => (
+                          <div key={n.id} className="flex items-center gap-2">
+                            <Link
+                              to={`/needs`}
+                              onClick={() => {
+                                setSearchQuery("");
+                                setSearchFocused(false);
+                              }}
+                              className="flex-1 px-4 py-2 hover:bg-muted text-sm"
+                            >
+                              {getCategoryLabel(n.type)}
+                              <span className="text-muted-foreground ml-1">
+                                — {(n as { familyName?: string }).familyName ?? "Famille"}
+                              </span>
+                            </Link>
+                            <Link
+                              to={`/aids?action=add&familyId=${n.familyId}&type=${n.type}`}
+                              onClick={() => {
+                                setSearchQuery("");
+                                setSearchFocused(false);
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-50 rounded"
+                            >
+                              Répondre
+                            </Link>
+                          </div>
+                        ))}
+                      {searchResult!.aids.length > 0 && (
+                        <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase mt-2">
+                          Aides
+                        </div>
+                      )}
+                      {searchResult!.aids.slice(0, 5).map((a) => (
+                          <Link
+                            key={a.id}
+                            to={`/aids`}
+                            onClick={() => {
+                              setSearchQuery("");
+                              setSearchFocused(false);
+                            }}
+                            className="block px-4 py-2 hover:bg-muted text-sm"
+                          >
+                            {getCategoryLabel(a.type)} x{a.quantity}
+                            <span className="text-muted-foreground ml-1">
+                              — {(a as { familyName?: string }).familyName ?? "Famille"}
+                            </span>
+                          </Link>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-1">

@@ -332,3 +332,67 @@ export const CHILD_SEX_LABELS: Record<ChildSex, string> = {
   male: "Garçon",
   female: "Fille",
 };
+
+// ============ AUDIT LOG ============
+
+export const AuditAction = z.enum(["created", "updated", "deleted"]);
+export type AuditAction = z.infer<typeof AuditAction>;
+
+export const AuditEntityType = z.enum([
+  "family",
+  "child",
+  "need",
+  "aid",
+  "note",
+  "category",
+  "article",
+]);
+export type AuditEntityType = z.infer<typeof AuditEntityType>;
+
+export const AuditLogSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  userName: z.string(),
+  action: AuditAction,
+  entityType: AuditEntityType,
+  entityId: z.string(),
+  details: z.string().optional(),
+  createdAt: z.string(),
+});
+export type AuditLog = z.infer<typeof AuditLogSchema>;
+
+// ============ FAMILY DOCUMENT ============
+
+export const FamilyDocumentType = z.enum(["id", "prescription", "other"]);
+export type FamilyDocumentType = z.infer<typeof FamilyDocumentType>;
+
+export const FAMILY_DOCUMENT_TYPE_LABELS: Record<FamilyDocumentType, string> = {
+  id: "Pièce d'identité",
+  prescription: "Ordonnance",
+  other: "Autre document",
+};
+
+export const FamilyDocumentSchema = z.object({
+  id: z.string(),
+  familyId: z.string(),
+  name: z.string(),
+  documentType: FamilyDocumentType,
+  fileData: z.string(), // base64
+  mimeType: z.string(),
+  uploadedAt: z.string(),
+  uploadedBy: z.string(),
+  uploadedByName: z.string(),
+});
+export type FamilyDocument = z.infer<typeof FamilyDocumentSchema>;
+
+export const CreateFamilyDocumentSchema = z.object({
+  familyId: z.string(),
+  name: z.string().min(1),
+  documentType: FamilyDocumentType,
+  fileData: z.string(),
+  mimeType: z.string(),
+});
+export type CreateFamilyDocumentInput = z.infer<typeof CreateFamilyDocumentSchema> & {
+  uploadedBy: string;
+  uploadedByName: string;
+};

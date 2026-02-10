@@ -56,6 +56,7 @@ export default function Aids() {
 
   // ═══════ Quick-add state ═══════
   const preselectedFamily = searchParams.get("familyId") || "";
+  const preselectedType = searchParams.get("type") || "";
   const [showAddDialog, setShowAddDialog] = useState(
     searchParams.get("action") === "add" || !!preselectedFamily
   );
@@ -64,7 +65,14 @@ export default function Aids() {
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
   const [aidItems, setAidItems] = useState<
     { id: string; categoryId: string; articleId: string; quantity: number }[]
-  >([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
+  >(() => [
+    {
+      id: "item-1",
+      categoryId: preselectedType,
+      articleId: "",
+      quantity: 1,
+    },
+  ]);
   const source: AidSource = "donation";
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");

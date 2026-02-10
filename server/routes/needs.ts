@@ -44,6 +44,17 @@ export const handleCreateNeed: RequestHandler = (req, res) => {
     return;
   }
   const need = storage.createNeed(parsed.data);
+  const user = (res as any).locals?.user;
+  if (user) {
+    storage.appendAuditLog({
+      userId: user.id,
+      userName: user.name,
+      action: "created",
+      entityType: "need",
+      entityId: need.id,
+      details: need.type,
+    });
+  }
   res.status(201).json(need);
 };
 
@@ -53,14 +64,35 @@ export const handleUpdateNeed: RequestHandler = (req, res) => {
     res.status(404).json({ error: "Besoin non trouvé" });
     return;
   }
+  const user = (res as any).locals?.user;
+  if (user) {
+    storage.appendAuditLog({
+      userId: user.id,
+      userName: user.name,
+      action: "updated",
+      entityType: "need",
+      entityId: need.id,
+    });
+  }
   res.json(need);
 };
 
 export const handleDeleteNeed: RequestHandler = (req, res) => {
-  const success = storage.deleteNeed(req.params.id as string);
+  const id = req.params.id as string;
+  const success = storage.deleteNeed(id);
   if (!success) {
     res.status(404).json({ error: "Besoin non trouvé" });
     return;
+  }
+  const user = (res as any).locals?.user;
+  if (user) {
+    storage.appendAuditLog({
+      userId: user.id,
+      userName: user.name,
+      action: "deleted",
+      entityType: "need",
+      entityId: id,
+    });
   }
   res.json({ success: true });
 };

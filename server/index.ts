@@ -17,6 +17,13 @@ import { handleGetNotes, handleCreateNote } from "./routes/notes";
 import { handleGetDashboardStats, handleGetExportData } from "./routes/dashboard";
 import { handleGetCategories, handleCreateCategory, handleUpdateCategory, handleDeleteCategory } from "./routes/categories";
 import { handleGetAllArticles, handleGetArticlesByCategory, handleCreateArticle, handleUpdateArticle, handleDeleteArticle, handleAdjustArticleStock } from "./routes/articles";
+import { handleSearch } from "./routes/search";
+import { handleGetAuditLogs } from "./routes/audit";
+import {
+  handleGetFamilyDocuments,
+  handleCreateFamilyDocument,
+  handleDeleteFamilyDocument,
+} from "./routes/documents";
 import { storage } from "./storage";
 
 // ---------- Auth Middleware ----------
@@ -88,9 +95,13 @@ export function createServer() {
   // ----- Admin-only routes -----
   app.get("/api/users", requireAuth, requireAdmin, handleGetUsers);
   app.get("/api/export", requireAuth, requireAdmin, handleGetExportData);
+  app.get("/api/audit-logs", requireAuth, requireAdmin, handleGetAuditLogs);
 
   // Dashboard (authenticated)
   app.get("/api/dashboard/stats", requireAuth, handleGetDashboardStats);
+
+  // Global search (authenticated)
+  app.get("/api/search", requireAuth, handleSearch);
 
   // Families (authenticated, delete = admin only)
   app.get("/api/families", requireAuth, handleGetFamilies);
@@ -120,6 +131,11 @@ export function createServer() {
   // Visit Notes (authenticated)
   app.get("/api/families/:familyId/notes", requireAuth, handleGetNotes);
   app.post("/api/families/:familyId/notes", requireAuth, handleCreateNote);
+
+  // Family Documents (authenticated)
+  app.get("/api/families/:familyId/documents", requireAuth, handleGetFamilyDocuments);
+  app.post("/api/families/:familyId/documents", requireAuth, handleCreateFamilyDocument);
+  app.delete("/api/families/:familyId/documents/:documentId", requireAuth, handleDeleteFamilyDocument);
 
   return app;
 }

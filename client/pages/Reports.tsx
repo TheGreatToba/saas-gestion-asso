@@ -11,6 +11,7 @@ import {
   Gift,
   Calendar,
   Printer,
+  History,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -28,8 +29,23 @@ import { statusBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
+const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  family: "Famille",
+  child: "Enfant",
+  need: "Besoin",
+  aid: "Aide",
+  note: "Note",
+  category: "Catégorie",
+  article: "Article",
+};
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  created: "Créé",
+  updated: "Modifié",
+  deleted: "Supprimé",
+};
+
 export default function Reports() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { categories, getCategoryLabel } = useCategories();
   const [exporting, setExporting] = useState(false);
 
@@ -51,6 +67,12 @@ export default function Reports() {
   const { data: aids = [] } = useQuery({
     queryKey: ["aids-all"],
     queryFn: api.getAids,
+  });
+
+  const { data: auditLogs = [] } = useQuery({
+    queryKey: ["audit-logs"],
+    queryFn: () => api.getAuditLogs(100),
+    enabled: !!isAdmin,
   });
 
   const exportCSV = (type: "families" | "needs" | "aids") => {
@@ -199,6 +221,50 @@ export default function Reports() {
             </Button>
           </div>
         </div>
+
+        {/* Audit log (admin only) */}
+        {isAdmin && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Historique des modifications
+            </h2>
+            <div className="overflow-x-auto max-h-80 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-4">Date</th>
+                    <th className="pb-2 pr-4">Utilisateur</th>
+                    <th className="pb-2 pr-4">Action</th>
+                    <th className="pb-2 pr-4">Type</th>
+                    <th className="pb-2 pr-4">Détail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-4 text-muted-foreground text-center">
+                        Aucune modification enregistrée
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <tr key={log.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {format(new Date(log.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
+                        </td>
+                        <td className="py-2 pr-4">{log.userName}</td>
+                        <td className="py-2 pr-4">{AUDIT_ACTION_LABELS[log.action] ?? log.action}</td>
+                        <td className="py-2 pr-4">{AUDIT_ENTITY_LABELS[log.entityType] ?? log.entityType}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{log.details ?? log.entityId}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

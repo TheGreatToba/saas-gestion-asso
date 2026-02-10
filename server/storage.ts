@@ -15,6 +15,9 @@ import type {
   CreateCategoryInput,
   CreateArticleInput,
   DashboardStats,
+  AuditLog,
+  FamilyDocument,
+  CreateFamilyDocumentInput,
 } from "../shared/schema";
 
 function generateId(): string {
@@ -41,6 +44,8 @@ class Storage {
   private visitNotes: VisitNote[] = [];
   private categories: Category[] = [];
   private articles: Article[] = [];
+  private auditLogs: AuditLog[] = [];
+  private familyDocuments: FamilyDocument[] = [];
 
   constructor() {
     this.seed();
@@ -444,6 +449,31 @@ class Storage {
     );
   }
 
+  searchGlobal(query: string): { families: Family[]; needs: Need[]; aids: Aid[] } {
+    const q = query.trim().toLowerCase();
+    if (!q) return { families: [], needs: [], aids: [] };
+    const categoryLabels = this.getCategoryLabels();
+    const families = this.searchFamilies(query);
+    const familyIds = new Set(families.map((f) => f.id));
+    const needs = this.needs.filter((n) => {
+      if (familyIds.has(n.familyId)) return true;
+      const label = (categoryLabels[n.type] || "").toLowerCase();
+      if (label.includes(q)) return true;
+      if ((n.comment || "").toLowerCase().includes(q)) return true;
+      if ((n.details || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+    const aids = this.aids.filter((a) => {
+      if (familyIds.has(a.familyId)) return true;
+      const label = (categoryLabels[a.type] || "").toLowerCase();
+      if (label.includes(q)) return true;
+      if ((a.volunteerName || "").toLowerCase().includes(q)) return true;
+      if ((a.notes || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+    return { families, needs, aids };
+  }
+
   // ==================== CHILDREN ====================
 
   getChildrenByFamily(familyId: string): Child[] {
@@ -662,6 +692,60 @@ class Storage {
       })),
       stats: this.getDashboardStats(),
     };
+  }
+
+  // ==================== AUDIT LOG ====================
+
+  appendAuditLog(entry: {
+    userId: string;
+    userName: string;
+    action: "created" | "updated" | "deleted";
+    entityType: AuditLog["entityType"];
+    entityId: string;
+    details?: string;
+  }): AuditLog {
+    const log: AuditLog = {
+      id: "audit-" + generateId(),
+      userId: entry.userId,
+      userName: entry.userName,
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      details: entry.details,
+      createdAt: now(),
+    };
+    this.auditLogs.unshift(log);
+    if (this.auditLogs.length > 500) this.auditLogs.pop();
+    return log;
+  }
+
+  getAuditLogs(limit = 100): AuditLog[] {
+    return this.auditLogs.slice(0, limit);
+  }
+
+  // ==================== FAMILY DOCUMENTS ====================
+
+  getDocumentsByFamily(familyId: string): FamilyDocument[] {
+    return this.familyDocuments
+      .filter((d) => d.familyId === familyId)
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+
+  createFamilyDocument(input: CreateFamilyDocumentInput): FamilyDocument {
+    const doc: FamilyDocument = {
+      ...input,
+      id: "doc-" + generateId(),
+      uploadedAt: now(),
+    };
+    this.familyDocuments.push(doc);
+    return doc;
+  }
+
+  deleteFamilyDocument(id: string): boolean {
+    const idx = this.familyDocuments.findIndex((d) => d.id === id);
+    if (idx === -1) return false;
+    this.familyDocuments.splice(idx, 1);
+    return true;
   }
 }
 

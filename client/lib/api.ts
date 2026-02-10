@@ -191,4 +191,32 @@ export const api = {
 
   // Export
   getExportData: () => fetchJson<any>("/api/export"),
+
+  // Global search
+  searchGlobal: (q: string) =>
+    fetchJson<{ families: Family[]; needs: Need[]; aids: Aid[] }>(
+      `/api/search?q=${encodeURIComponent(q)}`
+    ),
+
+  // Audit log (admin)
+  getAuditLogs: (limit?: number) =>
+    fetchJson<import("@shared/schema").AuditLog[]>(
+      limit ? `/api/audit-logs?limit=${limit}` : "/api/audit-logs"
+    ),
+
+  // Family documents
+  getFamilyDocuments: (familyId: string) =>
+    fetchJson<import("@shared/schema").FamilyDocument[]>(
+      `/api/families/${familyId}/documents`
+    ),
+  createFamilyDocument: (familyId: string, data: { name: string; documentType: string; fileData: string; mimeType: string }) =>
+    fetchJson<import("@shared/schema").FamilyDocument>(
+      `/api/families/${familyId}/documents`,
+      { method: "POST", body: JSON.stringify({ ...data, familyId }) }
+    ),
+  deleteFamilyDocument: (familyId: string, documentId: string) =>
+    fetchJson<{ success: boolean }>(
+      `/api/families/${familyId}/documents/${documentId}`,
+      { method: "DELETE" }
+    ),
 };

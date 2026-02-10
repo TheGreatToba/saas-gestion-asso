@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Filter,
   Trash2,
+  Gift,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -334,7 +335,13 @@ export default function Needs() {
                         })}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <Link to={`/aids?action=add&familyId=${need.familyId}&type=${need.type}`}>
+                        <Button size="sm" variant="default" className="gap-1.5 bg-green-600 hover:bg-green-700">
+                          <Gift className="w-3.5 h-3.5" />
+                          Répondre à ce besoin
+                        </Button>
+                      </Link>
                       <Select
                         value={need.status}
                         onValueChange={(v) =>
