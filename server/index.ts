@@ -143,6 +143,9 @@ export function createServer() {
           );
           return callback(null, true);
         }
+        console.error(
+          `[CORS] Origine refusée: "${origin}". Autorisées: ${JSON.stringify(allowedOrigins)}`,
+        );
         return callback(new Error("Origine non autorisée par CORS"));
       },
     }),
