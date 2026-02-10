@@ -309,7 +309,7 @@ export default function Aids() {
 
         {/* ═══════════ ADD AID DIALOG ═══════════ */}
         <Dialog open={showAddDialog} onOpenChange={(open) => (open ? setShowAddDialog(true) : closeAddDialog())}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-green-600" />
