@@ -7,8 +7,21 @@ interface AuthTokenPayload {
 
 const DEFAULT_TTL_SECONDS = 60 * 60 * 12; // 12h
 
+// Resolve secret at module load so a missing secret fails fast in production.
+const AUTH_SECRET: string | null =
+  process.env.AUTH_SECRET ??
+  (process.env.NODE_ENV === "production"
+    ? null
+    : "dev-insecure-secret-change-me");
+
+if (!AUTH_SECRET) {
+  throw new Error(
+    "AUTH_SECRET must be defined in the environment (no fallback allowed in production).",
+  );
+}
+
 function getSecret(): string {
-  return process.env.AUTH_SECRET || "dev-insecure-secret-change-me";
+  return AUTH_SECRET!;
 }
 
 function toBase64Url(input: string): string {

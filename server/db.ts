@@ -164,6 +164,11 @@ function daysAgo(days: number): string {
 }
 
 function seedIfEmpty(database: Database.Database): void {
+  // In production, avoid creating demo users / sample data automatically.
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+
   const userCount = database
     .prepare("SELECT COUNT(*) as c FROM users")
     .get() as { c: number };

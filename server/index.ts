@@ -59,6 +59,8 @@ import {
 import { storage } from "./storage";
 import { verifyAuthToken } from "./auth-token";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // ---------- Auth Middleware ----------
 
 /**
@@ -109,7 +111,35 @@ export function createServer() {
   const app = express();
 
   // Middleware
-  app.use(cors());
+  const allowedOriginsEnv = process.env.CORS_ORIGINS;
+  const allowedOrigins = allowedOriginsEnv
+    ? allowedOriginsEnv
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean)
+    : ["http://localhost:5173", "http://127.0.0.1:5173"];
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) {
+          // Allow non-browser clients / same-origin
+          return callback(null, true);
+        }
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        if (!isProduction) {
+          // In non-production, log but allow for easier local testing
+          console.warn(
+            `[CORS] Requête depuis une origine non autorisée: ${origin}`,
+          );
+          return callback(null, true);
+        }
+        return callback(new Error("Origine non autorisée par CORS"));
+      },
+    }),
+  );
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -124,15 +154,6 @@ export function createServer() {
     res.json({ message: ping });
   });
   app.get("/api/demo", handleDemo);
-
-  // Debug: Check if demo users exist
-  app.get("/api/debug/users", (_req, res) => {
-    const users = storage.getAllUsers();
-    res.json({
-      total: users.length,
-      users: users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role }))
-    });
-  });
 
   // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", handleLogin);
@@ -219,20 +240,23 @@ export function createServer() {
   app.get("/api/families/:familyId/notes", requireAuth, handleGetNotes);
   app.post("/api/families/:familyId/notes", requireAuth, handleCreateNote);
 
-  // Family Documents (authenticated)
+  // Family Documents (admin only - documents souvent sensibles)
   app.get(
     "/api/families/:familyId/documents",
     requireAuth,
+    requireAdmin,
     handleGetFamilyDocuments,
   );
   app.post(
     "/api/families/:familyId/documents",
     requireAuth,
+    requireAdmin,
     handleCreateFamilyDocument,
   );
   app.delete(
     "/api/families/:familyId/documents/:documentId",
     requireAuth,
+    requireAdmin,
     handleDeleteFamilyDocument,
   );
 

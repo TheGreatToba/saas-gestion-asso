@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 
+const IS_DEMO_ENV = import.meta.env.MODE !== "production";
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -115,22 +117,28 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-xs text-muted-foreground mb-3 font-medium">
-              Comptes de démonstration :
-            </p>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between bg-gray-50 p-2 rounded">
-                <span className="text-muted-foreground">Admin</span>
-                <span className="font-mono">admin@socialaid.org / admin123</span>
-              </div>
-              <div className="flex justify-between bg-gray-50 p-2 rounded">
-                <span className="text-muted-foreground">Bénévole</span>
-                <span className="font-mono">fatima@socialaid.org / volunteer123</span>
+          {/* Demo accounts - only shown in non-production environments */}
+          {IS_DEMO_ENV && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <p className="text-xs text-muted-foreground mb-3 font-medium">
+                Comptes de démonstration :
+              </p>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between bg-gray-50 p-2 rounded">
+                  <span className="text-muted-foreground">Admin</span>
+                  <span className="font-mono">
+                    admin@socialaid.org / admin123
+                  </span>
+                </div>
+                <div className="flex justify-between bg-gray-50 p-2 rounded">
+                  <span className="text-muted-foreground">Bénévole</span>
+                  <span className="font-mono">
+                    fatima@socialaid.org / volunteer123
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
