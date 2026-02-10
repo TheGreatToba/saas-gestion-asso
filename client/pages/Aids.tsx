@@ -363,6 +363,7 @@ export default function Aids() {
                                 : "bg-red-100 text-red-800 border-red-300"
                             }`}>
                               {f.housing === "housed" ? "Hébergé" : f.housing === "pending_placement" ? "En attente" : "Sans hébergement"}
+                              {f.housingName && ` — ${f.housingName}`}
                             </Badge>
                           </button>
                         ))

@@ -47,6 +47,7 @@ const emptyForm: CreateFamilyInput = {
   memberCount: 1,
   childrenCount: 0,
   housing: "not_housed",
+  housingName: "",
   healthNotes: "",
   hasMedicalNeeds: false,
   notes: "",
@@ -127,6 +128,7 @@ export default function Families() {
       memberCount: family.memberCount,
       childrenCount: family.childrenCount,
       housing: family.housing,
+      housingName: family.housingName || "",
       healthNotes: family.healthNotes || "",
       hasMedicalNeeds: family.hasMedicalNeeds || false,
       notes: family.notes || "",
@@ -227,6 +229,7 @@ export default function Families() {
                         }`}
                       >
                         {FAMILY_HOUSING_LABELS[family.housing]}
+                        {family.housingName && ` — ${family.housingName}`}
                       </Badge>
                       {family.hasMedicalNeeds && (
                         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
@@ -404,6 +407,16 @@ export default function Families() {
                   </Select>
                 </div>
               </div>
+              {(form.housing === "housed" || form.housing === "pending_placement") && (
+                <div className="space-y-2">
+                  <Label>Nom du foyer</Label>
+                  <Input
+                    value={form.housingName}
+                    onChange={(e) => setForm({ ...form, housingName: e.target.value })}
+                    placeholder="Ex: Ahlan, Berchifa, Moujamaa 2 Diyan..."
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea
