@@ -62,7 +62,7 @@ export default function Families() {
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
   const [form, setForm] = useState<CreateFamilyInput>(emptyForm);
 
-  const { data: families = [], isLoading } = useQuery({
+  const { data: families = [], isLoading, error } = useQuery({
     queryKey: ["families", search],
     queryFn: () => api.getFamilies(search || undefined),
   });
@@ -106,6 +106,9 @@ export default function Families() {
       queryClient.invalidateQueries({ queryKey: ["families"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast({ title: "Famille supprimée" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -156,7 +159,7 @@ export default function Families() {
                 : "Consultez et mettez à jour les informations des familles"}
             </p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} className="gap-2 w-full sm:w-auto" size="lg">
             <Plus className="w-4 h-4" />
             Nouvelle famille
           </Button>
@@ -166,12 +169,18 @@ export default function Families() {
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher par nom, quartier, téléphone..."
+            placeholder="Rechercher par nom, quartier, foyer, téléphone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
           />
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Impossible de charger les familles.
+          </div>
+        )}
 
         {medicalFilter && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
@@ -211,13 +220,18 @@ export default function Families() {
               >
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <Link
                         to={`/families/${family.id}`}
                         className="text-lg font-semibold text-foreground hover:text-primary transition truncate"
                       >
                         {family.responsibleName}
                       </Link>
+                      <span className="text-muted-foreground font-normal text-base">
+                        {(family.housing === "housed" || family.housing === "pending_placement") && family.housingName
+                          ? family.housingName
+                          : family.neighborhood}
+                      </span>
                       <Badge
                         variant="outline"
                         className={`shrink-0 ${
@@ -229,7 +243,6 @@ export default function Families() {
                         }`}
                       >
                         {FAMILY_HOUSING_LABELS[family.housing]}
-                        {family.housingName && ` — ${family.housingName}`}
                       </Badge>
                       {family.hasMedicalNeeds && (
                         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
@@ -308,7 +321,7 @@ export default function Families() {
 
         {/* Create/Edit Dialog */}
         <Dialog open={showForm || !!editingFamily} onOpenChange={closeDialog}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingFamily ? "Modifier la famille" : "Nouvelle famille"}
@@ -324,6 +337,7 @@ export default function Families() {
                   }
                   placeholder="Nom complet"
                   required
+                  autoComplete="name"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -334,6 +348,8 @@ export default function Families() {
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="06 XX XX XX XX"
                     required
+                    inputMode="tel"
+                    autoComplete="tel"
                   />
                 </div>
                 <div className="space-y-2">
@@ -357,6 +373,7 @@ export default function Families() {
                   }
                   placeholder="Adresse complète"
                   required
+                  autoComplete="street-address"
                 />
               </div>
               <div className="grid grid-cols-3 gap-4">

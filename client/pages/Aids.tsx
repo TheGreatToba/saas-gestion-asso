@@ -56,6 +56,7 @@ export default function Aids() {
 
   // ═══════ Quick-add state ═══════
   const preselectedFamily = searchParams.get("familyId") || "";
+  const preselectedType = searchParams.get("type") || "";
   const [showAddDialog, setShowAddDialog] = useState(
     searchParams.get("action") === "add" || !!preselectedFamily
   );
@@ -64,7 +65,14 @@ export default function Aids() {
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
   const [aidItems, setAidItems] = useState<
     { id: string; categoryId: string; articleId: string; quantity: number }[]
-  >([{ id: "item-1", categoryId: "", articleId: "", quantity: 1 }]);
+  >(() => [
+    {
+      id: "item-1",
+      categoryId: preselectedType,
+      articleId: "",
+      quantity: 1,
+    },
+  ]);
   const source: AidSource = "donation";
   const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes] = useState("");
@@ -75,7 +83,7 @@ export default function Aids() {
   const [listSearch, setListSearch] = useState("");
 
   // ═══════ Data queries ═══════
-  const { data: aids = [], isLoading } = useQuery({
+  const { data: aids = [], isLoading, error } = useQuery({
     queryKey: ["aids-all"],
     queryFn: api.getAids,
   });
@@ -300,7 +308,7 @@ export default function Aids() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-green-600 hover:bg-green-700" size="lg">
+            <Button onClick={() => setShowAddDialog(true)} className="gap-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto" size="lg">
               <Zap className="w-5 h-5" />
               Enregistrer une aide
             </Button>
@@ -669,6 +677,12 @@ export default function Aids() {
             )}
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Impossible de charger les aides.
+          </div>
+        )}
 
         {/* ═══════════ AIDS LIST ═══════════ */}
         {isLoading ? (

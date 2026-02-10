@@ -1,7 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   FileDown,
   FileSpreadsheet,
@@ -11,27 +20,97 @@ import {
   Gift,
   Calendar,
   Printer,
+  History,
+  Upload,
+  AlertCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
 import {
+  CreateFamilySchema,
   NEED_URGENCY_LABELS,
   NEED_STATUS_LABELS,
   PRIORITY_LABELS,
   AID_SOURCE_LABELS,
   FAMILY_HOUSING_LABELS,
 } from "@shared/schema";
-import type { EnrichedNeed } from "@shared/schema";
-import { statusBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
+import type { CreateFamilyInput, EnrichedNeed } from "@shared/schema";
+import { priorityBadgeClasses } from "@/lib/utils";
+import { parseCsv, normalizeHeader } from "@/lib/csv";
+import { toast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
+const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  family: "Famille",
+  child: "Enfant",
+  need: "Besoin",
+  aid: "Aide",
+  note: "Note",
+  category: "Catégorie",
+  article: "Article",
+  user: "Utilisateur",
+};
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  created: "Créé",
+  updated: "Modifié",
+  deleted: "Supprimé",
+};
+
+type FieldKey = keyof CreateFamilyInput;
+type MappingRule = {
+  source: "column" | "fixed";
+  column?: string;
+  fixed?: string;
+};
+
+const FIELD_DEFS: {
+  key: FieldKey;
+  label: string;
+  required: boolean;
+  type: "string" | "number" | "boolean" | "housing";
+  placeholder?: string;
+  defaultValue?: string;
+}[] = [
+  { key: "responsibleName", label: "Nom du responsable", required: true, type: "string" },
+  { key: "phone", label: "Téléphone", required: true, type: "string" },
+  { key: "address", label: "Adresse", required: true, type: "string" },
+  { key: "neighborhood", label: "Quartier", required: true, type: "string" },
+  { key: "memberCount", label: "Membres", required: true, type: "number", defaultValue: "1" },
+  { key: "childrenCount", label: "Enfants", required: true, type: "number", defaultValue: "0" },
+  { key: "housing", label: "Hébergement", required: true, type: "housing", defaultValue: "not_housed" },
+  { key: "housingName", label: "Nom du foyer", required: false, type: "string" },
+  { key: "healthNotes", label: "Maladies et spécificités", required: false, type: "string" },
+  { key: "hasMedicalNeeds", label: "Cas médical (oui/non)", required: false, type: "boolean", defaultValue: "non" },
+  { key: "notes", label: "Notes", required: false, type: "string" },
+];
+
+const FIELD_ALIASES: Record<FieldKey, string[]> = {
+  responsibleName: ["nom", "responsable", "chef", "beneficiaire", "bénéficiaire"],
+  phone: ["telephone", "téléphone", "tel", "gsm", "mobile"],
+  address: ["adresse", "address"],
+  neighborhood: ["quartier", "neighborhood", "secteur", "zone"],
+  memberCount: ["membres", "membre", "famille", "taille"],
+  childrenCount: ["enfants", "enfant", "children"],
+  housing: ["hebergement", "hébergement", "foyer", "housing", "situation"],
+  housingName: ["nom foyer", "foyer", "centre", "hebergement"],
+  healthNotes: ["sante", "santé", "maladie", "medical", "médical"],
+  hasMedicalNeeds: ["cas medical", "médical", "medical", "priorite medicale"],
+  notes: ["notes", "commentaire", "remarque"],
+};
+
 export default function Reports() {
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
   const { categories, getCategoryLabel } = useCategories();
   const [exporting, setExporting] = useState(false);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [mapping, setMapping] = useState<Record<FieldKey, MappingRule>>({});
+  const [duplicateStrategy, setDuplicateStrategy] = useState<"skip" | "update">("skip");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<import("@shared/api").ImportFamiliesResult | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats"],
@@ -52,6 +131,164 @@ export default function Reports() {
     queryKey: ["aids-all"],
     queryFn: api.getAids,
   });
+
+  const { data: auditLogs = [] } = useQuery({
+    queryKey: ["audit-logs"],
+    queryFn: () => api.getAuditLogs(100),
+    enabled: !!isAdmin,
+  });
+
+  const normalizePhone = (value?: string) => (value ?? "").replace(/\D/g, "");
+
+  const guessMapping = (headers: string[]): Record<FieldKey, MappingRule> => {
+    const headerMap = new Map(
+      headers.map((h) => [normalizeHeader(h), h]),
+    );
+    const initial: Record<FieldKey, MappingRule> = {} as Record<
+      FieldKey,
+      MappingRule
+    >;
+    FIELD_DEFS.forEach((field) => {
+      const aliases = FIELD_ALIASES[field.key] ?? [];
+      const match = aliases
+        .map((alias) => headerMap.get(normalizeHeader(alias)))
+        .find(Boolean);
+      if (match) {
+        initial[field.key] = { source: "column", column: match };
+      } else if (field.defaultValue !== undefined) {
+        initial[field.key] = { source: "fixed", fixed: field.defaultValue };
+      } else {
+        initial[field.key] = { source: "column", column: "" };
+      }
+    });
+    return initial;
+  };
+
+  const detectDelimiter = (text: string) => {
+    const firstLine = text.split(/\r?\n/)[0] ?? "";
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semiCount = (firstLine.match(/;/g) || []).length;
+    return semiCount > commaCount ? ";" : ",";
+  };
+
+  const handleCsvUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      const parsed = parseCsv(text, detectDelimiter(text));
+      setCsvHeaders(parsed.headers);
+      setCsvRows(parsed.rows);
+      setMapping(guessMapping(parsed.headers));
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const parseBoolean = (value: string | undefined): boolean | undefined => {
+    if (!value) return undefined;
+    const raw = value.trim().toLowerCase();
+    if (["oui", "yes", "true", "1"].includes(raw)) return true;
+    if (["non", "no", "false", "0"].includes(raw)) return false;
+    return undefined;
+  };
+
+  const parseNumber = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const num = parseInt(value.replace(/[^\d-]/g, ""), 10);
+    return Number.isNaN(num) ? undefined : num;
+  };
+
+  const parseHousing = (value: string | undefined): CreateFamilyInput["housing"] | undefined => {
+    if (!value) return undefined;
+    const normalized = normalizeHeader(value);
+    if (normalized.includes("heberg") || normalized.includes("foyer")) return "housed";
+    if (normalized.includes("attente") || normalized.includes("placement")) return "pending_placement";
+    if (normalized.includes("sans") || normalized.includes("domicile")) return "not_housed";
+    if (["housed", "pending_placement", "not_housed"].includes(normalized)) {
+      return normalized as CreateFamilyInput["housing"];
+    }
+    return undefined;
+  };
+
+  const mappedRows = useMemo(() => {
+    if (csvRows.length === 0) return [];
+    return csvRows.map((row) => {
+      const record: Partial<CreateFamilyInput> = {};
+      FIELD_DEFS.forEach((field) => {
+        const rule = mapping[field.key];
+        let rawValue = "";
+        if (rule?.source === "column" && rule.column) {
+          const idx = csvHeaders.indexOf(rule.column);
+          rawValue = idx >= 0 ? (row[idx] ?? "") : "";
+        }
+        if (rule?.source === "fixed") {
+          rawValue = rule.fixed ?? "";
+        }
+        const trimmed = rawValue.toString().trim();
+        if (!trimmed && field.defaultValue) {
+          rawValue = field.defaultValue;
+        }
+
+        if (field.type === "number") {
+          const val = parseNumber(rawValue.toString());
+          if (val !== undefined) record[field.key] = val as never;
+          return;
+        }
+        if (field.type === "boolean") {
+          const val = parseBoolean(rawValue.toString());
+          if (val !== undefined) record[field.key] = val as never;
+          return;
+        }
+        if (field.type === "housing") {
+          const val = parseHousing(rawValue.toString());
+          if (val) record[field.key] = val as never;
+          return;
+        }
+        if (trimmed) record[field.key] = trimmed as never;
+      });
+      return record;
+    });
+  }, [csvRows, csvHeaders, mapping]);
+
+  const existingPhones = useMemo(() => {
+    return new Set(families.map((f) => normalizePhone(f.phone)));
+  }, [families]);
+
+  const preview = useMemo(() => {
+    if (mappedRows.length === 0) return [];
+    return mappedRows.slice(0, 10).map((row) => {
+      const prepared: CreateFamilyInput = {
+        responsibleName: row.responsibleName ?? "",
+        phone: row.phone ?? "",
+        address: row.address ?? "",
+        neighborhood: row.neighborhood ?? "",
+        memberCount: row.memberCount ?? 1,
+        childrenCount: row.childrenCount ?? 0,
+        housing: row.housing ?? "not_housed",
+        housingName: row.housingName ?? "",
+        healthNotes: row.healthNotes ?? "",
+        hasMedicalNeeds: row.hasMedicalNeeds ?? false,
+        notes: row.notes ?? "",
+      };
+      const validation = CreateFamilySchema.safeParse(prepared);
+      const duplicate = !!prepared.phone && existingPhones.has(normalizePhone(prepared.phone));
+      return {
+        prepared,
+        valid: validation.success,
+        duplicate,
+      };
+    });
+  }, [mappedRows, existingPhones]);
+
+  const invalidCount = useMemo(
+    () => preview.filter((p) => !p.valid).length,
+    [preview],
+  );
+
+  const duplicateCount = useMemo(
+    () => preview.filter((p) => p.duplicate).length,
+    [preview],
+  );
 
   const exportCSV = (type: "families" | "needs" | "aids") => {
     setExporting(true);
@@ -95,6 +332,20 @@ export default function Reports() {
     } finally {
       setExporting(false);
     }
+  };
+
+  const downloadTemplate = () => {
+    const header = FIELD_DEFS.map((f) => f.label).join(";");
+    const csv = `${header}\n`;
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "import-familles-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const printReport = () => {
@@ -199,6 +450,351 @@ export default function Reports() {
             </Button>
           </div>
         </div>
+
+        {/* Import CSV (admin only) */}
+        {isAdmin && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                Import CSV (familles)
+              </h2>
+              <Button variant="outline" size="sm" onClick={downloadTemplate}>
+                Télécharger un modèle
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Import initial ou reprise de données. La détection des doublons se
+              fait par numéro de téléphone.
+            </p>
+
+            <div className="grid gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <Label className="min-w-40">Fichier CSV</Label>
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    if (file) handleCsvUpload(file);
+                  }}
+                />
+              </div>
+
+              {csvHeaders.length > 0 && (
+                <>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm font-medium mb-3">
+                      Mapping des colonnes
+                    </p>
+                    <div className="grid gap-3">
+                      {FIELD_DEFS.map((field) => {
+                        const rule = mapping[field.key] || {
+                          source: "column",
+                          column: "",
+                        };
+                        const selectValue =
+                          rule.source === "fixed"
+                            ? "__fixed"
+                            : rule.column || "__none";
+                        return (
+                          <div
+                            key={field.key}
+                            className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
+                          >
+                            <Label className="sm:col-span-3">
+                              {field.label}
+                              {field.required && " *"}
+                            </Label>
+                            <div className="sm:col-span-5">
+                              <Select
+                                value={selectValue}
+                                onValueChange={(value) => {
+                                  if (value === "__fixed") {
+                                    setMapping((prev) => ({
+                                      ...prev,
+                                      [field.key]: {
+                                        source: "fixed",
+                                        fixed:
+                                          prev[field.key]?.fixed ??
+                                          field.defaultValue ??
+                                          "",
+                                      },
+                                    }));
+                                    return;
+                                  }
+                                  if (value === "__none") {
+                                    setMapping((prev) => ({
+                                      ...prev,
+                                      [field.key]: {
+                                        source: "column",
+                                        column: "",
+                                      },
+                                    }));
+                                    return;
+                                  }
+                                  setMapping((prev) => ({
+                                    ...prev,
+                                    [field.key]: { source: "column", column: value },
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Choisir une colonne" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none">Ignorer</SelectItem>
+                                  {csvHeaders.map((header) => (
+                                    <SelectItem key={header} value={header}>
+                                      {header}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__fixed">Valeur fixe</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="sm:col-span-4">
+                              {rule.source === "fixed" && (
+                                <>
+                                  {field.type === "housing" ? (
+                                    <Select
+                                      value={rule.fixed ?? field.defaultValue ?? "not_housed"}
+                                      onValueChange={(value) =>
+                                        setMapping((prev) => ({
+                                          ...prev,
+                                          [field.key]: { source: "fixed", fixed: value },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="housed">Hébergé</SelectItem>
+                                        <SelectItem value="pending_placement">
+                                          En attente
+                                        </SelectItem>
+                                        <SelectItem value="not_housed">
+                                          Sans hébergement
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : field.type === "boolean" ? (
+                                    <Select
+                                      value={rule.fixed ?? field.defaultValue ?? "non"}
+                                      onValueChange={(value) =>
+                                        setMapping((prev) => ({
+                                          ...prev,
+                                          [field.key]: { source: "fixed", fixed: value },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="oui">Oui</SelectItem>
+                                        <SelectItem value="non">Non</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input
+                                      value={rule.fixed ?? ""}
+                                      onChange={(e) =>
+                                        setMapping((prev) => ({
+                                          ...prev,
+                                          [field.key]: {
+                                            source: "fixed",
+                                            fixed: e.target.value,
+                                          },
+                                        }))
+                                      }
+                                      placeholder={field.defaultValue ?? "Valeur"}
+                                    />
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                    <div className="flex items-center gap-2">
+                      <Label>Doublons (téléphone)</Label>
+                      <Select
+                        value={duplicateStrategy}
+                        onValueChange={(v: "skip" | "update") => setDuplicateStrategy(v)}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="skip">Ignorer</SelectItem>
+                          <SelectItem value="update">Mettre à jour</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {csvRows.length} ligne{csvRows.length !== 1 ? "s" : ""} détectée{csvRows.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <AlertCircle className="w-4 h-4 text-blue-600" />
+                      <p className="text-sm font-medium">Prévisualisation</p>
+                      {invalidCount > 0 && (
+                        <Badge variant="destructive">{invalidCount} ligne(s) invalide(s)</Badge>
+                      )}
+                      {duplicateCount > 0 && (
+                        <Badge variant="outline" className="text-orange-600 border-orange-200">
+                          {duplicateCount} doublon(s)
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="py-2 pr-3">Nom</th>
+                            <th className="py-2 pr-3">Téléphone</th>
+                            <th className="py-2 pr-3">Quartier</th>
+                            <th className="py-2 pr-3">Membres</th>
+                            <th className="py-2 pr-3">Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.map((row, idx) => (
+                            <tr key={idx} className="border-b last:border-0">
+                              <td className="py-2 pr-3">{row.prepared.responsibleName || "—"}</td>
+                              <td className="py-2 pr-3">{row.prepared.phone || "—"}</td>
+                              <td className="py-2 pr-3">{row.prepared.neighborhood || "—"}</td>
+                              <td className="py-2 pr-3">{row.prepared.memberCount}</td>
+                              <td className="py-2 pr-3">
+                                {!row.valid ? (
+                                  <span className="text-red-600">Invalide</span>
+                                ) : row.duplicate ? (
+                                  <span className="text-orange-600">Doublon</span>
+                                ) : (
+                                  <span className="text-green-600">OK</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 items-center">
+                    <Button
+                      onClick={async () => {
+                        setImporting(true);
+                        try {
+                          const result = await api.importFamilies({
+                            rows: mappedRows,
+                            duplicateStrategy,
+                          });
+                          setImportResult(result);
+                          toast({
+                            title: "Import terminé",
+                            description: `${result.created} créées, ${result.updated} mises à jour, ${result.skipped} ignorées`,
+                          });
+                        } catch (err) {
+                          const message = err instanceof Error ? err.message : "Erreur";
+                          setImportResult(null);
+                          toast({
+                            title: "Erreur d'import",
+                            description: message,
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setImporting(false);
+                        }
+                      }}
+                      disabled={mappedRows.length === 0 || importing}
+                      className="gap-2"
+                    >
+                      {importing ? "Import en cours..." : `Importer ${mappedRows.length} ligne(s)`}
+                    </Button>
+                    {importResult && (
+                      <div className="text-sm text-muted-foreground">
+                        {importResult.created} créées, {importResult.updated} mises à jour, {importResult.skipped} ignorées
+                        {importResult.errors.length > 0 && (
+                          <span className="text-red-600 ml-2">
+                            {importResult.errors.length} erreur(s)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {importResult && importResult.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      <p className="font-medium mb-2">Erreurs détectées</p>
+                      <div className="space-y-1">
+                        {importResult.errors.slice(0, 5).map((err, idx) => (
+                          <div key={`${err.row}-${idx}`}>
+                            Ligne {err.row}: {err.message}
+                          </div>
+                        ))}
+                        {importResult.errors.length > 5 && (
+                          <div>+{importResult.errors.length - 5} autres erreurs</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Audit log (admin only) */}
+        {isAdmin && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Historique des modifications
+            </h2>
+            <div className="overflow-x-auto max-h-80 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-4">Date</th>
+                    <th className="pb-2 pr-4">Utilisateur</th>
+                    <th className="pb-2 pr-4">Action</th>
+                    <th className="pb-2 pr-4">Type</th>
+                    <th className="pb-2 pr-4">Détail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-4 text-muted-foreground text-center">
+                        Aucune modification enregistrée
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <tr key={log.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {format(new Date(log.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
+                        </td>
+                        <td className="py-2 pr-4">{log.userName}</td>
+                        <td className="py-2 pr-4">{AUDIT_ACTION_LABELS[log.action] ?? log.action}</td>
+                        <td className="py-2 pr-4">{AUDIT_ENTITY_LABELS[log.entityType] ?? log.entityType}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{log.details ?? log.entityId}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -114,6 +114,9 @@ export default function Stock() {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       toast({ title: "Catégorie supprimée" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const createArticleMutation = useMutation({
@@ -149,6 +152,9 @@ export default function Stock() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       toast({ title: "Article supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 

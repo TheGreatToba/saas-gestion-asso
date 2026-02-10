@@ -14,8 +14,16 @@ import type {
   CreateVisitNoteInput,
   CreateCategoryInput,
   CreateArticleInput,
+  CreateUserInput,
+  UpdateUserInput,
   DashboardStats,
+  AuditLog,
+  FamilyDocument,
+  CreateFamilyDocumentInput,
 } from "../shared/schema";
+import { getDb } from "./db";
+import type Database from "better-sqlite3";
+import { hashPassword, isPasswordHash, verifyPassword } from "./passwords";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -25,267 +33,373 @@ function now(): string {
   return new Date().toISOString();
 }
 
-function daysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
+// --- Row mappers (DB snake_case -> schema camelCase) ---
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: number;
+};
+function mapUser(r: UserRow): User {
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    role: r.role as User["role"],
+    active: !!r.active,
+  };
+}
+
+type FamilyRow = {
+  id: string;
+  responsible_name: string;
+  phone: string;
+  address: string;
+  neighborhood: string;
+  member_count: number;
+  children_count: number;
+  housing: string;
+  housing_name: string;
+  health_notes: string;
+  has_medical_needs: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  last_visit_at: string | null;
+};
+function mapFamily(r: FamilyRow): Family {
+  return {
+    id: r.id,
+    responsibleName: r.responsible_name,
+    phone: r.phone,
+    address: r.address,
+    neighborhood: r.neighborhood,
+    memberCount: r.member_count,
+    childrenCount: r.children_count,
+    housing: r.housing as Family["housing"],
+    housingName: r.housing_name ?? "",
+    healthNotes: r.health_notes ?? "",
+    hasMedicalNeeds: !!r.has_medical_needs,
+    notes: r.notes ?? "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    lastVisitAt: r.last_visit_at ?? null,
+  };
+}
+
+type ChildRow = {
+  id: string;
+  family_id: string;
+  first_name: string;
+  age: number;
+  sex: string;
+  specific_needs: string;
+  created_at: string;
+};
+function mapChild(r: ChildRow): Child {
+  return {
+    id: r.id,
+    familyId: r.family_id,
+    firstName: r.first_name,
+    age: r.age,
+    sex: r.sex as Child["sex"],
+    specificNeeds: r.specific_needs ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+type NeedRow = {
+  id: string;
+  family_id: string;
+  type: string;
+  urgency: string;
+  status: string;
+  comment: string;
+  details: string;
+  created_at: string;
+  updated_at: string;
+};
+function mapNeed(r: NeedRow): Need {
+  return {
+    id: r.id,
+    familyId: r.family_id,
+    type: r.type,
+    urgency: r.urgency as Need["urgency"],
+    status: r.status as Need["status"],
+    comment: r.comment ?? "",
+    details: r.details ?? "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+type AidRow = {
+  id: string;
+  family_id: string;
+  type: string;
+  article_id: string;
+  quantity: number;
+  date: string;
+  volunteer_id: string;
+  volunteer_name: string;
+  source: string;
+  notes: string;
+  proof_url: string;
+  created_at: string;
+};
+function mapAid(r: AidRow): Aid {
+  return {
+    id: r.id,
+    familyId: r.family_id,
+    type: r.type,
+    articleId: r.article_id || undefined,
+    quantity: r.quantity,
+    date: r.date,
+    volunteerId: r.volunteer_id,
+    volunteerName: r.volunteer_name,
+    source: r.source as Aid["source"],
+    notes: r.notes ?? "",
+    proofUrl: r.proof_url ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+type VisitNoteRow = {
+  id: string;
+  family_id: string;
+  volunteer_id: string;
+  volunteer_name: string;
+  content: string;
+  date: string;
+  created_at: string;
+};
+function mapVisitNote(r: VisitNoteRow): VisitNote {
+  return {
+    id: r.id,
+    familyId: r.family_id,
+    volunteerId: r.volunteer_id,
+    volunteerName: r.volunteer_name,
+    content: r.content,
+    date: r.date,
+    createdAt: r.created_at,
+  };
+}
+
+type CategoryRow = {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+};
+function mapCategory(r: CategoryRow): Category {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+type ArticleRow = {
+  id: string;
+  category_id: string;
+  name: string;
+  description: string;
+  unit: string;
+  stock_quantity: number;
+  stock_min: number;
+  created_at: string;
+};
+function mapArticle(r: ArticleRow): Article {
+  return {
+    id: r.id,
+    categoryId: r.category_id,
+    name: r.name,
+    description: r.description ?? "",
+    unit: r.unit ?? "unités",
+    stockQuantity: r.stock_quantity,
+    stockMin: r.stock_min,
+    createdAt: r.created_at,
+  };
+}
+
+type AuditLogRow = {
+  id: string;
+  user_id: string;
+  user_name: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: string | null;
+  created_at: string;
+};
+function mapAuditLog(r: AuditLogRow): AuditLog {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    userName: r.user_name,
+    action: r.action as AuditLog["action"],
+    entityType: r.entity_type as AuditLog["entityType"],
+    entityId: r.entity_id,
+    details: r.details ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+type FamilyDocumentRow = {
+  id: string;
+  family_id: string;
+  name: string;
+  document_type: string;
+  file_data: string;
+  mime_type: string;
+  uploaded_at: string;
+  uploaded_by: string;
+  uploaded_by_name: string;
+};
+function mapFamilyDocument(r: FamilyDocumentRow): FamilyDocument {
+  return {
+    id: r.id,
+    familyId: r.family_id,
+    name: r.name,
+    documentType: r.document_type as FamilyDocument["documentType"],
+    fileData: r.file_data,
+    mimeType: r.mime_type,
+    uploadedAt: r.uploaded_at,
+    uploadedBy: r.uploaded_by,
+    uploadedByName: r.uploaded_by_name,
+  };
 }
 
 class Storage {
-  private users: User[] = [];
-  private passwords: Map<string, string> = new Map(); // userId -> password
-  private families: Family[] = [];
-  private children: Child[] = [];
-  private needs: Need[] = [];
-  private aids: Aid[] = [];
-  private visitNotes: VisitNote[] = [];
-  private categories: Category[] = [];
-  private articles: Article[] = [];
-
-  constructor() {
-    this.seed();
-  }
-
-  private seed() {
-    // ---- Categories (groupings) ----
-    this.categories = [
-      { id: "food", name: "Nourriture", description: "Colis alimentaires, denrées", createdAt: daysAgo(365) },
-      { id: "diapers", name: "Couches", description: "Couches bébé toutes tailles", createdAt: daysAgo(365) },
-      { id: "clothes", name: "Vêtements", description: "Vêtements enfants et adultes", createdAt: daysAgo(365) },
-      { id: "blankets", name: "Couvertures", description: "Couvertures et draps", createdAt: daysAgo(365) },
-      { id: "mattress", name: "Matelas", description: "Matelas simple et double", createdAt: daysAgo(365) },
-      { id: "medical", name: "Consultation médicale", description: "Consultations et soins", createdAt: daysAgo(365) },
-    ];
-
-    // ---- Articles (stock variants within categories) ----
-    this.articles = [
-      { id: "art-food-colis", categoryId: "food", name: "Colis alimentaire standard", description: "Riz, huile, sucre, farine, conserves", unit: "colis", stockQuantity: 18, stockMin: 5, createdAt: daysAgo(365) },
-      { id: "art-food-farine1", categoryId: "food", name: "Farine 1kg", description: "Pack de farine de 1kg", unit: "paquets", stockQuantity: 30, stockMin: 10, createdAt: daysAgo(60) },
-      { id: "art-food-farine2", categoryId: "food", name: "Farine 2kg", description: "Pack de farine de 2kg", unit: "paquets", stockQuantity: 12, stockMin: 5, createdAt: daysAgo(30) },
-      { id: "art-diaper-t1", categoryId: "diapers", name: "Couches taille 1", description: "Nouveau-né", unit: "paquets", stockQuantity: 4, stockMin: 3, createdAt: daysAgo(365) },
-      { id: "art-diaper-t3", categoryId: "diapers", name: "Couches taille 3", description: "4-9 kg", unit: "paquets", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
-      { id: "art-diaper-t5", categoryId: "diapers", name: "Couches taille 5", description: "11-25 kg", unit: "paquets", stockQuantity: 3, stockMin: 3, createdAt: daysAgo(365) },
-      { id: "art-clothes-child", categoryId: "clothes", name: "Vêtements enfant", description: "Toutes tailles enfant", unit: "pièces", stockQuantity: 30, stockMin: 10, createdAt: daysAgo(365) },
-      { id: "art-clothes-adult", categoryId: "clothes", name: "Vêtements adulte", description: "Toutes tailles adulte", unit: "pièces", stockQuantity: 12, stockMin: 5, createdAt: daysAgo(365) },
-      { id: "art-blanket", categoryId: "blankets", name: "Couverture standard", description: "Couverture polaire", unit: "pièces", stockQuantity: 8, stockMin: 3, createdAt: daysAgo(365) },
-      { id: "art-mattress-s", categoryId: "mattress", name: "Matelas 1 place", description: "", unit: "pièces", stockQuantity: 2, stockMin: 2, createdAt: daysAgo(365) },
-      { id: "art-mattress-d", categoryId: "mattress", name: "Matelas 2 places", description: "", unit: "pièces", stockQuantity: 1, stockMin: 1, createdAt: daysAgo(365) },
-    ];
-
-    // ---- Users ----
-    const admin: User = {
-      id: "usr-admin",
-      name: "Administrateur",
-      email: "admin@socialaid.org",
-      role: "admin",
-    };
-    const volunteer1: User = {
-      id: "usr-vol1",
-      name: "Fatima Mansouri",
-      email: "fatima@socialaid.org",
-      role: "volunteer",
-    };
-    const volunteer2: User = {
-      id: "usr-vol2",
-      name: "Mohamed Kaddouri",
-      email: "mohamed@socialaid.org",
-      role: "volunteer",
-    };
-    this.users = [admin, volunteer1, volunteer2];
-    this.passwords.set("usr-admin", "admin123");
-    this.passwords.set("usr-vol1", "volunteer123");
-    this.passwords.set("usr-vol2", "volunteer123");
-
-    // ---- Families ----
-    this.families = [
-      {
-        id: "fam-001",
-        responsibleName: "Ahmed Ben Ali",
-        phone: "06 12 34 56 78",
-        address: "12 Rue de la Paix",
-        neighborhood: "Médina",
-        memberCount: 6,
-        childrenCount: 4,
-        housing: "not_housed",
-        housingName: "",
-        healthNotes: "",
-        hasMedicalNeeds: false,
-        notes: "Famille nombreuse, père au chômage depuis 6 mois",
-        createdAt: daysAgo(90),
-        updatedAt: daysAgo(2),
-        lastVisitAt: daysAgo(2),
-      },
-      {
-        id: "fam-002",
-        responsibleName: "Samir El Idrissi",
-        phone: "06 23 45 67 89",
-        address: "45 Avenue Hassan II",
-        neighborhood: "Hay Mohammadi",
-        memberCount: 4,
-        childrenCount: 2,
-        housing: "housed",
-        housingName: "Berchifa",
-        healthNotes: "Mère malade, besoin de suivi régulier",
-        hasMedicalNeeds: true,
-        notes: "",
-        createdAt: daysAgo(60),
-        updatedAt: daysAgo(5),
-        lastVisitAt: daysAgo(5),
-      },
-      {
-        id: "fam-003",
-        responsibleName: "Zahra Ouahbi",
-        phone: "06 34 56 78 90",
-        address: "8 Derb Sidi Bousmara",
-        neighborhood: "Ancienne Médina",
-        memberCount: 3,
-        childrenCount: 1,
-        housing: "pending_placement",
-        housingName: "",
-        healthNotes: "",
-        hasMedicalNeeds: false,
-        notes: "Mère célibataire, très isolée — en attente de placement en foyer",
-        createdAt: daysAgo(45),
-        updatedAt: daysAgo(1),
-        lastVisitAt: daysAgo(1),
-      },
-      {
-        id: "fam-004",
-        responsibleName: "Hassan Tazi",
-        phone: "06 45 67 89 01",
-        address: "22 Rue Ibnou Sina",
-        neighborhood: "Sidi Bernoussi",
-        memberCount: 8,
-        childrenCount: 5,
-        housing: "not_housed",
-        housingName: "",
-        healthNotes: "",
-        hasMedicalNeeds: false,
-        notes: "Grand-parents à charge, logement insalubre",
-        createdAt: daysAgo(120),
-        updatedAt: daysAgo(35),
-        lastVisitAt: daysAgo(35),
-      },
-      {
-        id: "fam-005",
-        responsibleName: "Karim Bennis",
-        phone: "06 56 78 90 12",
-        address: "3 Impasse des Oliviers",
-        neighborhood: "Hay Hassani",
-        memberCount: 5,
-        childrenCount: 3,
-        housing: "housed",
-        housingName: "Ahlan",
-        healthNotes: "",
-        hasMedicalNeeds: false,
-        notes: "",
-        createdAt: daysAgo(30),
-        updatedAt: daysAgo(10),
-        lastVisitAt: daysAgo(10),
-      },
-      {
-        id: "fam-006",
-        responsibleName: "Leila Amrani",
-        phone: "06 67 89 01 23",
-        address: "17 Boulevard Zerktouni",
-        neighborhood: "Maarif",
-        memberCount: 3,
-        childrenCount: 1,
-        housing: "not_housed",
-        housingName: "",
-        healthNotes: "Bébé prématuré, suivi médical nécessaire",
-        hasMedicalNeeds: true,
-        notes: "",
-        createdAt: daysAgo(15),
-        updatedAt: daysAgo(3),
-        lastVisitAt: daysAgo(3),
-      },
-    ];
-
-    // ---- Children ----
-    this.children = [
-      { id: "ch-001", familyId: "fam-001", firstName: "Youssef", age: 12, sex: "male", specificNeeds: "", createdAt: daysAgo(90) },
-      { id: "ch-002", familyId: "fam-001", firstName: "Amina", age: 8, sex: "female", specificNeeds: "Suivi scolaire", createdAt: daysAgo(90) },
-      { id: "ch-003", familyId: "fam-001", firstName: "Hamza", age: 4, sex: "male", specificNeeds: "Couches taille 5", createdAt: daysAgo(90) },
-      { id: "ch-004", familyId: "fam-001", firstName: "Sara", age: 1, sex: "female", specificNeeds: "Couches taille 3, lait infantile", createdAt: daysAgo(90) },
-      { id: "ch-005", familyId: "fam-002", firstName: "Nadia", age: 6, sex: "female", specificNeeds: "", createdAt: daysAgo(60) },
-      { id: "ch-006", familyId: "fam-002", firstName: "Omar", age: 3, sex: "male", specificNeeds: "Allergie alimentaire", createdAt: daysAgo(60) },
-      { id: "ch-007", familyId: "fam-003", firstName: "Yasmina", age: 2, sex: "female", specificNeeds: "Couches taille 4", createdAt: daysAgo(45) },
-      { id: "ch-008", familyId: "fam-004", firstName: "Rachid", age: 14, sex: "male", specificNeeds: "", createdAt: daysAgo(120) },
-      { id: "ch-009", familyId: "fam-004", firstName: "Fatima-Zahra", age: 10, sex: "female", specificNeeds: "Lunettes", createdAt: daysAgo(120) },
-      { id: "ch-010", familyId: "fam-004", firstName: "Anas", age: 7, sex: "male", specificNeeds: "", createdAt: daysAgo(120) },
-      { id: "ch-011", familyId: "fam-004", firstName: "Khadija", age: 3, sex: "female", specificNeeds: "Couches taille 5", createdAt: daysAgo(120) },
-      { id: "ch-012", familyId: "fam-004", firstName: "Ilyas", age: 1, sex: "male", specificNeeds: "Couches taille 3", createdAt: daysAgo(120) },
-      { id: "ch-013", familyId: "fam-005", firstName: "Soufiane", age: 9, sex: "male", specificNeeds: "", createdAt: daysAgo(30) },
-      { id: "ch-014", familyId: "fam-005", firstName: "Imane", age: 5, sex: "female", specificNeeds: "", createdAt: daysAgo(30) },
-      { id: "ch-015", familyId: "fam-005", firstName: "Adam", age: 2, sex: "male", specificNeeds: "Couches taille 4", createdAt: daysAgo(30) },
-      { id: "ch-016", familyId: "fam-006", firstName: "Rayan", age: 0, sex: "male", specificNeeds: "Prématuré, suivi médical, couches taille 1", createdAt: daysAgo(15) },
-    ];
-
-    // ---- Needs ----
-    this.needs = [
-      { id: "nd-001", familyId: "fam-001", type: "food", urgency: "high", status: "pending", comment: "Colis alimentaire mensuel", details: "", createdAt: daysAgo(5), updatedAt: daysAgo(5) },
-      { id: "nd-002", familyId: "fam-001", type: "diapers", urgency: "high", status: "pending", comment: "", details: "Taille 3 et Taille 5", createdAt: daysAgo(3), updatedAt: daysAgo(3) },
-      { id: "nd-003", familyId: "fam-002", type: "medical", urgency: "high", status: "pending", comment: "Consultation spécialiste pour la mère", details: "", createdAt: daysAgo(7), updatedAt: daysAgo(7) },
-      { id: "nd-004", familyId: "fam-003", type: "clothes", urgency: "medium", status: "partial", comment: "Vêtements d'hiver pour l'enfant", details: "Taille 2 ans", createdAt: daysAgo(10), updatedAt: daysAgo(4) },
-      { id: "nd-005", familyId: "fam-004", type: "mattress", urgency: "high", status: "pending", comment: "2 matelas nécessaires", details: "", createdAt: daysAgo(20), updatedAt: daysAgo(20) },
-      { id: "nd-006", familyId: "fam-004", type: "blankets", urgency: "medium", status: "pending", comment: "5 couvertures pour l'hiver", details: "", createdAt: daysAgo(15), updatedAt: daysAgo(15) },
-      { id: "nd-007", familyId: "fam-004", type: "food", urgency: "high", status: "pending", comment: "Famille non visitée depuis plus d'un mois", details: "", createdAt: daysAgo(35), updatedAt: daysAgo(35) },
-      { id: "nd-008", familyId: "fam-005", type: "diapers", urgency: "low", status: "covered", comment: "", details: "Taille 4", createdAt: daysAgo(12), updatedAt: daysAgo(8) },
-      { id: "nd-009", familyId: "fam-006", type: "medical", urgency: "high", status: "partial", comment: "Suivi pédiatrique bébé prématuré", details: "", createdAt: daysAgo(10), updatedAt: daysAgo(3) },
-      { id: "nd-010", familyId: "fam-006", type: "diapers", urgency: "medium", status: "pending", comment: "", details: "Taille 1 nouveau-né", createdAt: daysAgo(8), updatedAt: daysAgo(8) },
-      { id: "nd-011", familyId: "fam-005", type: "clothes", urgency: "low", status: "pending", comment: "Vêtements scolaires", details: "Tailles 9 ans et 5 ans", createdAt: daysAgo(6), updatedAt: daysAgo(6) },
-    ];
-
-    // ---- Aids ----
-    this.aids = [
-      { id: "aid-001", familyId: "fam-001", type: "food", quantity: 1, date: daysAgo(2), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Colis alimentaire complet", proofUrl: "", createdAt: daysAgo(2) },
-      { id: "aid-002", familyId: "fam-002", type: "food", quantity: 1, date: daysAgo(5), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "", proofUrl: "", createdAt: daysAgo(5) },
-      { id: "aid-003", familyId: "fam-003", type: "diapers", quantity: 3, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "purchase", notes: "3 paquets taille 4", proofUrl: "https://example.com/photo-couches.jpg", createdAt: daysAgo(4) },
-      { id: "aid-004", familyId: "fam-003", type: "clothes", quantity: 5, date: daysAgo(4), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "Vêtements 2 ans", proofUrl: "", createdAt: daysAgo(4) },
-      { id: "aid-005", familyId: "fam-005", type: "diapers", quantity: 2, date: daysAgo(8), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "partner", notes: "Partenariat pharmacie locale", proofUrl: "https://example.com/facture-pharmacie.jpg", createdAt: daysAgo(8) },
-      { id: "aid-006", familyId: "fam-006", type: "medical", quantity: 1, date: daysAgo(3), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "partner", notes: "Consultation pédiatrique via partenaire", proofUrl: "", createdAt: daysAgo(3) },
-      { id: "aid-007", familyId: "fam-001", type: "clothes", quantity: 8, date: daysAgo(15), volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", source: "donation", notes: "Vêtements enfants divers", proofUrl: "", createdAt: daysAgo(15) },
-      { id: "aid-008", familyId: "fam-002", type: "blankets", quantity: 2, date: daysAgo(20), volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", source: "donation", notes: "", proofUrl: "", createdAt: daysAgo(20) },
-    ];
-
-    // ---- Visit Notes ----
-    this.visitNotes = [
-      { id: "vn-001", familyId: "fam-001", volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", content: "Visite de routine. Le père cherche activement du travail. Les enfants sont scolarisés. Besoin urgent de couches et nourriture.", date: daysAgo(2), createdAt: daysAgo(2) },
-      { id: "vn-002", familyId: "fam-002", volunteerId: "usr-vol2", volunteerName: "Mohamed Kaddouri", content: "La mère doit voir un spécialiste. Rendez-vous à prendre. Les enfants vont bien.", date: daysAgo(5), createdAt: daysAgo(5) },
-      { id: "vn-003", familyId: "fam-003", volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", content: "Zahra est très reconnaissante. L'enfant grandit bien. Besoin de vêtements d'hiver bientôt.", date: daysAgo(1), createdAt: daysAgo(1) },
-      { id: "vn-004", familyId: "fam-006", volunteerId: "usr-vol1", volunteerName: "Fatima Mansouri", content: "Le bébé prend du poids. Prochain rendez-vous médical dans 2 semaines. Besoin de couches taille 1.", date: daysAgo(3), createdAt: daysAgo(3) },
-    ];
+  private get db(): Database.Database {
+    return getDb();
   }
 
   // ==================== AUTH ====================
 
-  authenticate(email: string, password: string): User | null {
-    const user = this.users.find((u) => u.email === email);
-    if (!user) return null;
-    const storedPassword = this.passwords.get(user.id);
-    if (storedPassword !== password) return null;
-    return user;
+  authenticate(
+    email: string,
+    password: string,
+  ): { user: User | null; error?: "disabled" } {
+    const user = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
+      .get(email) as UserRow | undefined;
+    if (!user) return { user: null };
+    const row = this.db
+      .prepare("SELECT password FROM passwords WHERE user_id = ?")
+      .get(user.id) as { password: string } | undefined;
+    if (!row) return { user: null };
+    const stored = row.password;
+    const valid = verifyPassword(password, stored);
+    if (!valid) return { user: null };
+    if (!user.active) return { user: null, error: "disabled" };
+    // Migrate legacy plain-text password to hash on first successful login
+    if (!isPasswordHash(stored)) {
+      this.db
+        .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
+        .run(hashPassword(password), user.id);
+    }
+    return { user: mapUser(user) };
   }
 
   getUser(id: string): User | null {
-    return this.users.find((u) => u.id === id) ?? null;
+    const r = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
+      .get(id) as UserRow | undefined;
+    return r ? mapUser(r) : null;
   }
 
   getAllUsers(): User[] {
-    return [...this.users];
+    const rows = this.db
+      .prepare("SELECT id, name, email, role, active FROM users ORDER BY role DESC, name")
+      .all() as UserRow[];
+    return rows.map(mapUser);
+  }
+
+  getUserByEmail(email: string): User | null {
+    const r = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
+      .get(email) as UserRow | undefined;
+    return r ? mapUser(r) : null;
+  }
+
+  countActiveAdmins(): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' AND active = 1")
+      .get() as { c: number };
+    return row.c;
+  }
+
+  createUser(input: CreateUserInput): User {
+    const existing = this.db
+      .prepare("SELECT 1 FROM users WHERE email = ?")
+      .get(input.email);
+    if (existing) {
+      throw new Error("Email déjà utilisé");
+    }
+    const id = "usr-" + generateId();
+    this.db
+      .prepare("INSERT INTO users (id, name, email, role, active) VALUES (?, ?, ?, ?, ?)")
+      .run(id, input.name, input.email, input.role, input.active ? 1 : 0);
+    this.db
+      .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
+      .run(id, hashPassword(input.password));
+    return this.getUser(id)!;
+  }
+
+  updateUser(id: string, input: UpdateUserInput): User | null {
+    const current = this.db
+      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
+      .get(id) as UserRow | undefined;
+    if (!current) return null;
+
+    if (input.email && input.email !== current.email) {
+      const existing = this.db
+        .prepare("SELECT 1 FROM users WHERE email = ?")
+        .get(input.email);
+      if (existing) {
+        throw new Error("Email déjà utilisé");
+      }
+    }
+
+    const name = input.name ?? current.name;
+    const email = input.email ?? current.email;
+    const role = input.role ?? (current.role as User["role"]);
+    const active = input.active !== undefined ? (input.active ? 1 : 0) : current.active;
+
+    this.db
+      .prepare("UPDATE users SET name = ?, email = ?, role = ?, active = ? WHERE id = ?")
+      .run(name, email, role, active, id);
+
+    if (input.password) {
+      this.db
+        .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
+        .run(hashPassword(input.password), id);
+    }
+
+    return this.getUser(id);
   }
 
   // ==================== CATEGORIES ====================
 
   getAllCategories(): Category[] {
-    return [...this.categories].sort(
-      (a, b) => a.name.localeCompare(b.name)
-    );
+    const rows = this.db
+      .prepare(
+        "SELECT id, name, description, created_at FROM categories ORDER BY name",
+      )
+      .all() as CategoryRow[];
+    return rows.map(mapCategory);
   }
 
   getCategory(id: string): Category | null {
-    return this.categories.find((c) => c.id === id) ?? null;
+    const r = this.db
+      .prepare(
+        "SELECT id, name, description, created_at FROM categories WHERE id = ?",
+      )
+      .get(id) as CategoryRow | undefined;
+    return r ? mapCategory(r) : null;
   }
 
   createCategory(input: CreateCategoryInput): Category {
@@ -295,303 +409,570 @@ class Storage {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
-    const id = slug || "cat-" + generateId();
-    const finalId = this.categories.find((c) => c.id === id)
-      ? id + "-" + generateId()
-      : id;
-    const category: Category = {
-      id: finalId,
+    let id = slug || "cat-" + generateId();
+    const existing = this.db
+      .prepare("SELECT 1 FROM categories WHERE id = ?")
+      .get(id);
+    if (existing) id = id + "-" + generateId();
+    const createdAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO categories (id, name, description, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(id, input.name, input.description ?? "", createdAt);
+    return {
+      id,
       name: input.name,
       description: input.description ?? "",
-      createdAt: now(),
+      createdAt,
     };
-    this.categories.push(category);
-    return category;
   }
 
-  updateCategory(id: string, input: Partial<CreateCategoryInput>): Category | null {
-    const idx = this.categories.findIndex((c) => c.id === id);
-    if (idx === -1) return null;
-    this.categories[idx] = { ...this.categories[idx], ...input };
-    return this.categories[idx];
+  updateCategory(
+    id: string,
+    input: Partial<CreateCategoryInput>,
+  ): Category | null {
+    const r = this.db
+      .prepare(
+        "SELECT id, name, description, created_at FROM categories WHERE id = ?",
+      )
+      .get(id) as CategoryRow | undefined;
+    if (!r) return null;
+    const name = input.name ?? r.name;
+    const description =
+      input.description !== undefined ? input.description : r.description;
+    this.db
+      .prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?")
+      .run(name, description ?? "", id);
+    return mapCategory({ ...r, name, description: description ?? "" });
   }
 
   deleteCategory(id: string): boolean {
-    const idx = this.categories.findIndex((c) => c.id === id);
-    if (idx === -1) return false;
-    this.categories.splice(idx, 1);
-    // cascade delete articles of this category
-    this.articles = this.articles.filter((a) => a.categoryId !== id);
-    return true;
+    const info = this.db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+    return info.changes > 0;
   }
 
   getCategoryLabels(): Record<string, string> {
+    const rows = this.db.prepare("SELECT id, name FROM categories").all() as {
+      id: string;
+      name: string;
+    }[];
     const map: Record<string, string> = {};
-    for (const cat of this.categories) {
-      map[cat.id] = cat.name;
-    }
+    for (const row of rows) map[row.id] = row.name;
     return map;
   }
 
-  // ==================== ARTICLES (stock variants) ====================
+  // ==================== ARTICLES ====================
 
   getAllArticles(): Article[] {
-    return [...this.articles].sort((a, b) => a.name.localeCompare(b.name));
+    const rows = this.db
+      .prepare(
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles ORDER BY name",
+      )
+      .all() as ArticleRow[];
+    return rows.map(mapArticle);
   }
 
   getArticlesByCategory(categoryId: string): Article[] {
-    return this.articles
-      .filter((a) => a.categoryId === categoryId)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const rows = this.db
+      .prepare(
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE category_id = ? ORDER BY name",
+      )
+      .all(categoryId) as ArticleRow[];
+    return rows.map(mapArticle);
   }
 
   getArticle(id: string): Article | null {
-    return this.articles.find((a) => a.id === id) ?? null;
+    const r = this.db
+      .prepare(
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+      )
+      .get(id) as ArticleRow | undefined;
+    return r ? mapArticle(r) : null;
   }
 
   createArticle(input: CreateArticleInput): Article {
-    const article: Article = {
-      id: "art-" + generateId(),
-      categoryId: input.categoryId,
+    const id = "art-" + generateId();
+    const createdAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO articles (id, category_id, name, description, unit, stock_quantity, stock_min, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.categoryId,
+        input.name,
+        input.description ?? "",
+        input.unit ?? "unités",
+        input.stockQuantity ?? 0,
+        input.stockMin ?? 0,
+        createdAt,
+      );
+    return mapArticle({
+      id,
+      category_id: input.categoryId,
       name: input.name,
       description: input.description ?? "",
       unit: input.unit ?? "unités",
-      stockQuantity: input.stockQuantity ?? 0,
-      stockMin: input.stockMin ?? 0,
-      createdAt: now(),
-    };
-    this.articles.push(article);
-    return article;
+      stock_quantity: input.stockQuantity ?? 0,
+      stock_min: input.stockMin ?? 0,
+      created_at: createdAt,
+    });
   }
 
-  updateArticle(id: string, input: Partial<Omit<CreateArticleInput, "categoryId">>): Article | null {
-    const idx = this.articles.findIndex((a) => a.id === id);
-    if (idx === -1) return null;
-    this.articles[idx] = { ...this.articles[idx], ...input };
-    return this.articles[idx];
+  updateArticle(
+    id: string,
+    input: Partial<Omit<CreateArticleInput, "categoryId">>,
+  ): Article | null {
+    const r = this.db
+      .prepare(
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+      )
+      .get(id) as ArticleRow | undefined;
+    if (!r) return null;
+    const name = input.name ?? r.name;
+    const description =
+      input.description !== undefined ? input.description : r.description;
+    const unit = input.unit ?? r.unit;
+    const stockQuantity =
+      input.stockQuantity !== undefined
+        ? input.stockQuantity
+        : r.stock_quantity;
+    const stockMin =
+      input.stockMin !== undefined ? input.stockMin : r.stock_min;
+    this.db
+      .prepare(
+        "UPDATE articles SET name = ?, description = ?, unit = ?, stock_quantity = ?, stock_min = ? WHERE id = ?",
+      )
+      .run(name, description ?? "", unit, stockQuantity, stockMin, id);
+    return mapArticle({
+      ...r,
+      name,
+      description: description ?? "",
+      unit,
+      stock_quantity: stockQuantity,
+      stock_min: stockMin,
+    });
   }
 
   deleteArticle(id: string): boolean {
-    const idx = this.articles.findIndex((a) => a.id === id);
-    if (idx === -1) return false;
-    this.articles.splice(idx, 1);
-    return true;
+    return (
+      this.db.prepare("DELETE FROM articles WHERE id = ?").run(id).changes > 0
+    );
   }
 
   adjustArticleStock(articleId: string, delta: number): Article | null {
-    const art = this.articles.find((a) => a.id === articleId);
-    if (!art) return null;
-    art.stockQuantity = Math.max(0, art.stockQuantity + delta);
-    return art;
+    const r = this.db
+      .prepare(
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+      )
+      .get(articleId) as ArticleRow | undefined;
+    if (!r) return null;
+    const stockQuantity = Math.max(0, r.stock_quantity + delta);
+    this.db
+      .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
+      .run(stockQuantity, articleId);
+    return mapArticle({ ...r, stock_quantity: stockQuantity });
   }
 
   // ==================== FAMILIES ====================
 
   getAllFamilies(): Family[] {
-    return [...this.families].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+    const rows = this.db
+      .prepare("SELECT * FROM families ORDER BY updated_at DESC")
+      .all() as FamilyRow[];
+    return rows.map(mapFamily);
   }
 
   getFamily(id: string): Family | null {
-    return this.families.find((f) => f.id === id) ?? null;
+    const r = this.db.prepare("SELECT * FROM families WHERE id = ?").get(id) as
+      | FamilyRow
+      | undefined;
+    return r ? mapFamily(r) : null;
   }
 
   createFamily(input: CreateFamilyInput): Family {
-    const family: Family = {
-      ...input,
-      id: "fam-" + generateId(),
-      createdAt: now(),
-      updatedAt: now(),
-      lastVisitAt: null,
-    };
-    this.families.push(family);
-    return family;
+    const id = "fam-" + generateId();
+    const createdAt = now();
+    const updatedAt = now();
+    this.db
+      .prepare(
+        `INSERT INTO families (id, responsible_name, phone, address, neighborhood, member_count, children_count,
+         housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.responsibleName,
+        input.phone,
+        input.address,
+        input.neighborhood,
+        input.memberCount,
+        input.childrenCount,
+        input.housing,
+        input.housingName ?? "",
+        input.healthNotes ?? "",
+        input.hasMedicalNeeds ? 1 : 0,
+        input.notes ?? "",
+        createdAt,
+        updatedAt,
+        null,
+      );
+    return this.getFamily(id)!;
   }
 
   updateFamily(id: string, input: Partial<CreateFamilyInput>): Family | null {
-    const idx = this.families.findIndex((f) => f.id === id);
-    if (idx === -1) return null;
-    this.families[idx] = {
-      ...this.families[idx],
-      ...input,
-      updatedAt: now(),
-    };
-    return this.families[idx];
+    const r = this.db.prepare("SELECT * FROM families WHERE id = ?").get(id) as
+      | FamilyRow
+      | undefined;
+    if (!r) return null;
+    const updatedAt = now();
+    this.db
+      .prepare(
+        `UPDATE families SET responsible_name = ?, phone = ?, address = ?, neighborhood = ?, member_count = ?, children_count = ?,
+         housing = ?, housing_name = ?, health_notes = ?, has_medical_needs = ?, notes = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        input.responsibleName ?? r.responsible_name,
+        input.phone ?? r.phone,
+        input.address ?? r.address,
+        input.neighborhood ?? r.neighborhood,
+        input.memberCount ?? r.member_count,
+        input.childrenCount ?? r.children_count,
+        input.housing ?? r.housing,
+        input.housingName ?? r.housing_name ?? "",
+        input.healthNotes ?? r.health_notes ?? "",
+        input.hasMedicalNeeds !== undefined
+          ? input.hasMedicalNeeds
+            ? 1
+            : 0
+          : r.has_medical_needs,
+        input.notes !== undefined ? input.notes : r.notes,
+        updatedAt,
+        id,
+      );
+    return this.getFamily(id);
   }
 
   deleteFamily(id: string): boolean {
-    const idx = this.families.findIndex((f) => f.id === id);
-    if (idx === -1) return false;
-    this.families.splice(idx, 1);
-    // cascade delete children, needs, aids, notes
-    this.children = this.children.filter((c) => c.familyId !== id);
-    this.needs = this.needs.filter((n) => n.familyId !== id);
-    this.aids = this.aids.filter((a) => a.familyId !== id);
-    this.visitNotes = this.visitNotes.filter((v) => v.familyId !== id);
-    return true;
+    return (
+      this.db.prepare("DELETE FROM families WHERE id = ?").run(id).changes > 0
+    );
   }
 
   searchFamilies(query: string): Family[] {
-    const q = query.toLowerCase();
-    return this.families.filter(
-      (f) =>
-        f.responsibleName.toLowerCase().includes(q) ||
-        f.neighborhood.toLowerCase().includes(q) ||
-        f.address.toLowerCase().includes(q) ||
-        f.phone.includes(q)
-    );
+    const q = "%" + query.toLowerCase().replace(/%/g, "\\%") + "%";
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM families WHERE lower(responsible_name) LIKE ? OR lower(neighborhood) LIKE ? OR lower(housing_name) LIKE ? OR lower(address) LIKE ? OR phone LIKE ?`,
+      )
+      .all(q, q, q, q, query) as FamilyRow[];
+    return rows.map(mapFamily);
+  }
+
+  searchGlobal(query: string): {
+    families: Family[];
+    needs: Need[];
+    aids: Aid[];
+  } {
+    const q = query.trim().toLowerCase();
+    if (!q) return { families: [], needs: [], aids: [] };
+    const categoryLabels = this.getCategoryLabels();
+    const families = this.searchFamilies(query);
+    const familyIds = new Set(families.map((f) => f.id));
+    const allNeeds = this.db.prepare("SELECT * FROM needs").all() as NeedRow[];
+    const allAids = this.db.prepare("SELECT * FROM aids").all() as AidRow[];
+    const needs = allNeeds.filter((n) => {
+      if (familyIds.has(n.family_id)) return true;
+      const label = (categoryLabels[n.type] || "").toLowerCase();
+      if (label.includes(q)) return true;
+      if ((n.comment || "").toLowerCase().includes(q)) return true;
+      if ((n.details || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+    const aids = allAids.filter((a) => {
+      if (familyIds.has(a.family_id)) return true;
+      const label = (categoryLabels[a.type] || "").toLowerCase();
+      if (label.includes(q)) return true;
+      if ((a.volunteer_name || "").toLowerCase().includes(q)) return true;
+      if ((a.notes || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+    return {
+      families,
+      needs: needs.map(mapNeed),
+      aids: aids.map(mapAid),
+    };
   }
 
   // ==================== CHILDREN ====================
 
   getChildrenByFamily(familyId: string): Child[] {
-    return this.children.filter((c) => c.familyId === familyId);
+    const rows = this.db
+      .prepare("SELECT * FROM children WHERE family_id = ? ORDER BY created_at")
+      .all(familyId) as ChildRow[];
+    return rows.map(mapChild);
   }
 
   createChild(input: CreateChildInput): Child {
-    const child: Child = {
-      ...input,
-      id: "ch-" + generateId(),
-      createdAt: now(),
-    };
-    this.children.push(child);
-    return child;
+    const id = "ch-" + generateId();
+    const createdAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO children (id, family_id, first_name, age, sex, specific_needs, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.familyId,
+        input.firstName,
+        input.age,
+        input.sex,
+        input.specificNeeds ?? "",
+        createdAt,
+      );
+    return mapChild({
+      id,
+      family_id: input.familyId,
+      first_name: input.firstName,
+      age: input.age,
+      sex: input.sex,
+      specific_needs: input.specificNeeds ?? "",
+      created_at: createdAt,
+    });
   }
 
   updateChild(id: string, input: Partial<CreateChildInput>): Child | null {
-    const idx = this.children.findIndex((c) => c.id === id);
-    if (idx === -1) return null;
-    this.children[idx] = { ...this.children[idx], ...input };
-    return this.children[idx];
+    const r = this.db.prepare("SELECT * FROM children WHERE id = ?").get(id) as
+      | ChildRow
+      | undefined;
+    if (!r) return null;
+    const firstName = input.firstName ?? r.first_name;
+    const age = input.age ?? r.age;
+    const sex = input.sex ?? r.sex;
+    const specificNeeds =
+      input.specificNeeds !== undefined
+        ? input.specificNeeds
+        : r.specific_needs;
+    this.db
+      .prepare(
+        "UPDATE children SET first_name = ?, age = ?, sex = ?, specific_needs = ? WHERE id = ?",
+      )
+      .run(firstName, age, sex, specificNeeds ?? "", id);
+    return mapChild({
+      ...r,
+      first_name: firstName,
+      age,
+      sex,
+      specific_needs: specificNeeds ?? "",
+    });
   }
 
   deleteChild(id: string): boolean {
-    const idx = this.children.findIndex((c) => c.id === id);
-    if (idx === -1) return false;
-    this.children.splice(idx, 1);
-    return true;
+    return (
+      this.db.prepare("DELETE FROM children WHERE id = ?").run(id).changes > 0
+    );
   }
 
   // ==================== NEEDS ====================
 
   getAllNeeds(): Need[] {
-    return [...this.needs].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    const rows = this.db
+      .prepare("SELECT * FROM needs ORDER BY created_at DESC")
+      .all() as NeedRow[];
+    return rows.map(mapNeed);
   }
 
   getNeedsByFamily(familyId: string): Need[] {
-    return this.needs
-      .filter((n) => n.familyId === familyId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM needs WHERE family_id = ? ORDER BY created_at DESC",
+      )
+      .all(familyId) as NeedRow[];
+    return rows.map(mapNeed);
   }
 
   createNeed(input: CreateNeedInput): Need {
-    const need: Need = {
-      ...input,
-      id: "nd-" + generateId(),
-      status: input.status ?? "pending",
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    this.needs.push(need);
-    return need;
+    const id = "nd-" + generateId();
+    const createdAt = now();
+    const status = input.status ?? "pending";
+    this.db
+      .prepare(
+        "INSERT INTO needs (id, family_id, type, urgency, status, comment, details, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.familyId,
+        input.type,
+        input.urgency,
+        status,
+        input.comment ?? "",
+        input.details ?? "",
+        createdAt,
+        createdAt,
+      );
+    return mapNeed({
+      id,
+      family_id: input.familyId,
+      type: input.type,
+      urgency: input.urgency,
+      status,
+      comment: input.comment ?? "",
+      details: input.details ?? "",
+      created_at: createdAt,
+      updated_at: createdAt,
+    });
   }
 
-  updateNeed(id: string, input: Partial<CreateNeedInput & { status: string }>): Need | null {
-    const idx = this.needs.findIndex((n) => n.id === id);
-    if (idx === -1) return null;
-    this.needs[idx] = {
-      ...this.needs[idx],
-      ...input,
-      updatedAt: now(),
-    };
-    return this.needs[idx];
+  updateNeed(
+    id: string,
+    input: Partial<CreateNeedInput & { status: string }>,
+  ): Need | null {
+    const r = this.db.prepare("SELECT * FROM needs WHERE id = ?").get(id) as
+      | NeedRow
+      | undefined;
+    if (!r) return null;
+    const updatedAt = now();
+    const type = input.type ?? r.type;
+    const urgency = input.urgency ?? r.urgency;
+    const status = input.status ?? r.status;
+    const comment = input.comment !== undefined ? input.comment : r.comment;
+    const details = input.details !== undefined ? input.details : r.details;
+    this.db
+      .prepare(
+        "UPDATE needs SET type = ?, urgency = ?, status = ?, comment = ?, details = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(type, urgency, status, comment ?? "", details ?? "", updatedAt, id);
+    return mapNeed({
+      ...r,
+      type,
+      urgency,
+      status,
+      comment: comment ?? "",
+      details: details ?? "",
+      updated_at: updatedAt,
+    });
   }
 
   deleteNeed(id: string): boolean {
-    const idx = this.needs.findIndex((n) => n.id === id);
-    if (idx === -1) return false;
-    this.needs.splice(idx, 1);
-    return true;
+    return (
+      this.db.prepare("DELETE FROM needs WHERE id = ?").run(id).changes > 0
+    );
   }
 
   // ==================== AIDS ====================
 
   getAllAids(): Aid[] {
-    return [...this.aids].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    const rows = this.db
+      .prepare("SELECT * FROM aids ORDER BY date DESC")
+      .all() as AidRow[];
+    return rows.map(mapAid);
   }
 
   getAidsByFamily(familyId: string): Aid[] {
-    return this.aids
-      .filter((a) => a.familyId === familyId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const rows = this.db
+      .prepare("SELECT * FROM aids WHERE family_id = ? ORDER BY date DESC")
+      .all(familyId) as AidRow[];
+    return rows.map(mapAid);
   }
 
   createAid(input: CreateAidInput): Aid {
-    const aid: Aid = {
-      ...input,
-      id: "aid-" + generateId(),
-      createdAt: now(),
-    };
-    this.aids.push(aid);
-    // Aide apportée = famille visitée
-    const family = this.families.find((f) => f.id === input.familyId);
-    if (family) {
-      family.lastVisitAt = input.date || now();
-      family.updatedAt = now();
-    }
-    // Decrement stock for the article (if specified)
+    const id = "aid-" + generateId();
+    const createdAt = now();
+    const date = input.date || now();
+    this.db
+      .prepare(
+        "INSERT INTO aids (id, family_id, type, article_id, quantity, date, volunteer_id, volunteer_name, source, notes, proof_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.familyId,
+        input.type,
+        input.articleId ?? "",
+        input.quantity ?? 1,
+        date,
+        input.volunteerId,
+        input.volunteerName,
+        input.source,
+        input.notes ?? "",
+        input.proofUrl ?? "",
+        createdAt,
+      );
+    this.db
+      .prepare(
+        "UPDATE families SET last_visit_at = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(date, now(), input.familyId);
     if (input.articleId) {
-      const art = this.articles.find((a) => a.id === input.articleId);
+      const art = this.db
+        .prepare("SELECT stock_quantity FROM articles WHERE id = ?")
+        .get(input.articleId) as { stock_quantity: number } | undefined;
       if (art) {
-        art.stockQuantity = Math.max(0, art.stockQuantity - (input.quantity || 1));
+        const newQty = Math.max(0, art.stock_quantity - (input.quantity ?? 1));
+        this.db
+          .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
+          .run(newQty, input.articleId);
       }
     }
-
-    // Auto-update matching pending/partial needs for this family
-    // When an aid of a certain type is given, mark matching needs as partially covered or covered
-    const matchingNeeds = this.needs.filter(
-      (n) => n.familyId === input.familyId && n.type === input.type && n.status !== "covered"
-    );
+    const matchingNeeds = this.db
+      .prepare(
+        "SELECT * FROM needs WHERE family_id = ? AND type = ? AND status != ?",
+      )
+      .all(input.familyId, input.type, "covered") as NeedRow[];
+    const upd = now();
     for (const need of matchingNeeds) {
-      // If need was pending → partial, if partial → covered
-      if (need.status === "pending") {
-        need.status = "partial";
-      } else if (need.status === "partial") {
-        need.status = "covered";
-      }
-      need.updatedAt = now();
+      const newStatus = need.status === "pending" ? "partial" : "covered";
+      this.db
+        .prepare("UPDATE needs SET status = ?, updated_at = ? WHERE id = ?")
+        .run(newStatus, upd, need.id);
     }
-
-    return aid;
+    const row = this.db
+      .prepare("SELECT * FROM aids WHERE id = ?")
+      .get(id) as AidRow;
+    return mapAid(row);
   }
 
   // ==================== VISIT NOTES ====================
 
   getNotesByFamily(familyId: string): VisitNote[] {
-    return this.visitNotes
-      .filter((v) => v.familyId === familyId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM visit_notes WHERE family_id = ? ORDER BY date DESC",
+      )
+      .all(familyId) as VisitNoteRow[];
+    return rows.map(mapVisitNote);
   }
 
   createVisitNote(input: CreateVisitNoteInput): VisitNote {
-    const note: VisitNote = {
-      ...input,
-      id: "vn-" + generateId(),
-      createdAt: now(),
-    };
-    this.visitNotes.push(note);
-    // Update family last visit
-    const family = this.families.find((f) => f.id === input.familyId);
-    if (family) {
-      family.lastVisitAt = input.date;
-      family.updatedAt = now();
-    }
-    return note;
+    const id = "vn-" + generateId();
+    const createdAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO visit_notes (id, family_id, volunteer_id, volunteer_name, content, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.familyId,
+        input.volunteerId,
+        input.volunteerName,
+        input.content,
+        input.date,
+        createdAt,
+      );
+    this.db
+      .prepare(
+        "UPDATE families SET last_visit_at = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(input.date, now(), input.familyId);
+    return mapVisitNote({
+      id,
+      family_id: input.familyId,
+      volunteer_id: input.volunteerId,
+      volunteer_name: input.volunteerName,
+      content: input.content,
+      date: input.date,
+      created_at: createdAt,
+    });
   }
 
   // ==================== DASHBOARD ====================
@@ -599,45 +980,56 @@ class Storage {
   getDashboardStats(): DashboardStats {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-
-    const totalFamilies = this.families.length;
-
-    const urgentNeeds = this.needs.filter(
-      (n) => n.urgency === "high" && n.status !== "covered"
-    ).length;
-
-    const aidsThisMonth = this.aids.filter(
-      (a) => new Date(a.date) >= startOfMonth
-    ).length;
-
-    const familiesNotVisited = this.families.filter((f) => {
-      if (!f.lastVisitAt) return true;
-      return new Date(f.lastVisitAt) < thirtyDaysAgo;
-    }).length;
-
-    const medicalFamilies = this.families.filter((f) => f.hasMedicalNeeds).length;
-
-    const recentAids = this.aids
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
-      .map((aid) => ({
-        ...aid,
-        familyName: this.families.find((f) => f.id === aid.familyId)?.responsibleName ?? "Inconnu",
-      }));
-
-    const urgentNeedsList = this.needs
-      .filter((n) => n.urgency === "high" && n.status !== "covered")
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5)
-      .map((need) => ({
-        ...need,
-        familyName: this.families.find((f) => f.id === need.familyId)?.responsibleName ?? "Inconnu",
-      }));
-
+    const totalFamilies = (
+      this.db.prepare("SELECT COUNT(*) as c FROM families").get() as {
+        c: number;
+      }
+    ).c;
+    const urgentNeeds = (
+      this.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM needs WHERE urgency = 'high' AND status != 'covered'",
+        )
+        .get() as { c: number }
+    ).c;
+    const aidsThisMonth = (
+      this.db
+        .prepare("SELECT COUNT(*) as c FROM aids WHERE date >= ?")
+        .get(startOfMonth.toISOString()) as { c: number }
+    ).c;
+    const familiesNotVisited = (
+      this.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM families WHERE last_visit_at IS NULL OR last_visit_at < ?",
+        )
+        .get(thirtyDaysAgo.toISOString()) as { c: number }
+    ).c;
+    const medicalFamilies = (
+      this.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM families WHERE has_medical_needs = 1",
+        )
+        .get() as { c: number }
+    ).c;
+    const recentAidsRows = this.db
+      .prepare("SELECT * FROM aids ORDER BY date DESC LIMIT 5")
+      .all() as AidRow[];
+    const recentAids = recentAidsRows.map((a) => {
+      const fam = this.getFamily(a.family_id);
+      return { ...mapAid(a), familyName: fam?.responsibleName ?? "Inconnu" };
+    });
+    const urgentNeedsRows = this.db
+      .prepare(
+        "SELECT * FROM needs WHERE urgency = 'high' AND status != 'covered' ORDER BY created_at DESC LIMIT 5",
+      )
+      .all() as NeedRow[];
+    const urgentNeedsList = urgentNeedsRows.map((n) => {
+      const fam = this.getFamily(n.family_id);
+      return { ...mapNeed(n), familyName: fam?.responsibleName ?? "Inconnu" };
+    });
     return {
       totalFamilies,
       urgentNeeds,
@@ -661,6 +1053,117 @@ class Storage {
       })),
       stats: this.getDashboardStats(),
     };
+  }
+
+  // ==================== AUDIT LOG ====================
+
+  appendAuditLog(entry: {
+    userId: string;
+    userName: string;
+    action: "created" | "updated" | "deleted";
+    entityType: AuditLog["entityType"];
+    entityId: string;
+    details?: string;
+  }): AuditLog {
+    const id = "audit-" + generateId();
+    const createdAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO audit_logs (id, user_id, user_name, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        entry.userId,
+        entry.userName,
+        entry.action,
+        entry.entityType,
+        entry.entityId,
+        entry.details ?? null,
+        createdAt,
+      );
+    const count = (
+      this.db.prepare("SELECT COUNT(*) as c FROM audit_logs").get() as {
+        c: number;
+      }
+    ).c;
+    if (count > 500) {
+      const oldest = this.db
+        .prepare("SELECT id FROM audit_logs ORDER BY created_at ASC LIMIT 1")
+        .get() as { id: string } | undefined;
+      if (oldest)
+        this.db.prepare("DELETE FROM audit_logs WHERE id = ?").run(oldest.id);
+    }
+    return mapAuditLog({
+      id,
+      user_id: entry.userId,
+      user_name: entry.userName,
+      action: entry.action,
+      entity_type: entry.entityType,
+      entity_id: entry.entityId,
+      details: entry.details ?? null,
+      created_at: createdAt,
+    });
+  }
+
+  getAuditLogs(limit = 100): AuditLog[] {
+    const rows = this.db
+      .prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?")
+      .all(limit) as AuditLogRow[];
+    return rows.map(mapAuditLog);
+  }
+
+  // ==================== FAMILY DOCUMENTS ====================
+
+  getDocumentsByFamily(familyId: string): FamilyDocument[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM family_documents WHERE family_id = ? ORDER BY uploaded_at DESC",
+      )
+      .all(familyId) as FamilyDocumentRow[];
+    return rows.map(mapFamilyDocument);
+  }
+
+  createFamilyDocument(
+    input: CreateFamilyDocumentInput & {
+      uploadedBy: string;
+      uploadedByName: string;
+    },
+  ): FamilyDocument {
+    const id = "doc-" + generateId();
+    const uploadedAt = now();
+    this.db
+      .prepare(
+        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        input.familyId,
+        input.name,
+        input.documentType,
+        input.fileData,
+        input.mimeType,
+        uploadedAt,
+        input.uploadedBy,
+        input.uploadedByName,
+      );
+    return mapFamilyDocument({
+      id,
+      family_id: input.familyId,
+      name: input.name,
+      document_type: input.documentType,
+      file_data: input.fileData,
+      mime_type: input.mimeType,
+      uploaded_at: uploadedAt,
+      uploaded_by: input.uploadedBy,
+      uploaded_by_name: input.uploadedByName,
+    });
+  }
+
+  deleteFamilyDocument(id: string): boolean {
+    return (
+      this.db.prepare("DELETE FROM family_documents WHERE id = ?").run(id)
+        .changes > 0
+    );
   }
 }
 

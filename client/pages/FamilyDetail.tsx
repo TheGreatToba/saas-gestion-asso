@@ -44,6 +44,7 @@ import {
   PRIORITY_LABELS,
   AID_SOURCE_LABELS,
   CHILD_SEX_LABELS,
+  FAMILY_DOCUMENT_TYPE_LABELS,
 } from "@shared/schema";
 import type {
   NeedUrgency,
@@ -51,6 +52,7 @@ import type {
   ChildSex,
   NeedStatus,
   EnrichedNeed,
+  FamilyDocumentType,
 } from "@shared/schema";
 import { statusBadgeClasses, urgencyBadgeClasses, priorityBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
@@ -66,34 +68,41 @@ export default function FamilyDetail() {
   const [showAddNeed, setShowAddNeed] = useState(false);
   const [showAddAid, setShowAddAid] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
+  const [showAddDocument, setShowAddDocument] = useState(false);
 
-  const { data: family, isLoading: familyLoading } = useQuery({
+  const { data: family, isLoading: familyLoading, error: familyError } = useQuery({
     queryKey: ["family", id],
     queryFn: () => api.getFamily(id!),
     enabled: !!id,
   });
 
-  const { data: children = [] } = useQuery({
+  const { data: children = [], error: childrenError } = useQuery({
     queryKey: ["children", id],
     queryFn: () => api.getChildren(id!),
     enabled: !!id,
   });
 
-  const { data: needs = [] } = useQuery({
+  const { data: needs = [], error: needsError } = useQuery({
     queryKey: ["needs", id],
     queryFn: () => api.getNeedsByFamily(id!),
     enabled: !!id,
   });
 
-  const { data: aids = [] } = useQuery({
+  const { data: aids = [], error: aidsError } = useQuery({
     queryKey: ["aids", id],
     queryFn: () => api.getAidsByFamily(id!),
     enabled: !!id,
   });
 
-  const { data: notes = [] } = useQuery({
+  const { data: notes = [], error: notesError } = useQuery({
     queryKey: ["notes", id],
     queryFn: () => api.getNotes(id!),
+    enabled: !!id,
+  });
+
+  const { data: documents = [], error: documentsError } = useQuery({
+    queryKey: ["documents", id],
+    queryFn: () => api.getFamilyDocuments(id!),
     enabled: !!id,
   });
 
@@ -103,6 +112,7 @@ export default function FamilyDetail() {
     queryClient.invalidateQueries({ queryKey: ["needs", id] });
     queryClient.invalidateQueries({ queryKey: ["aids", id] });
     queryClient.invalidateQueries({ queryKey: ["notes", id] });
+    queryClient.invalidateQueries({ queryKey: ["documents", id] });
     queryClient.invalidateQueries({ queryKey: ["family", id] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
   };
@@ -115,6 +125,9 @@ export default function FamilyDetail() {
       setShowAddChild(false);
       toast({ title: "Enfant ajouté" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const deleteChildMutation = useMutation({
@@ -122,6 +135,9 @@ export default function FamilyDetail() {
     onSuccess: () => {
       invalidateAll();
       toast({ title: "Enfant supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -132,6 +148,9 @@ export default function FamilyDetail() {
       setShowAddNeed(false);
       toast({ title: "Besoin ajouté" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const updateNeedMutation = useMutation({
@@ -140,6 +159,9 @@ export default function FamilyDetail() {
     onSuccess: () => {
       invalidateAll();
       toast({ title: "Statut mis à jour" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -150,6 +172,9 @@ export default function FamilyDetail() {
       setShowAddAid(false);
       toast({ title: "Aide enregistrée" });
     },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
   });
 
   const addNoteMutation = useMutation({
@@ -159,6 +184,33 @@ export default function FamilyDetail() {
       invalidateAll();
       setShowAddNote(false);
       toast({ title: "Note ajoutée" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const addDocumentMutation = useMutation({
+    mutationFn: (data: { name: string; documentType: FamilyDocumentType; fileData: string; mimeType: string }) =>
+      api.createFamilyDocument(id!, data),
+    onSuccess: () => {
+      invalidateAll();
+      setShowAddDocument(false);
+      toast({ title: "Document ajouté" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (documentId: string) => api.deleteFamilyDocument(id!, documentId),
+    onSuccess: () => {
+      invalidateAll();
+      toast({ title: "Document supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -220,6 +272,11 @@ export default function FamilyDetail() {
       <Header />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {(familyError || childrenError || needsError || aidsError || notesError || documentsError) && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+            Certaines données n'ont pas pu être chargées. Réessayez.
+          </div>
+        )}
         {/* Back + Header */}
         <Link
           to="/families"
@@ -292,9 +349,36 @@ export default function FamilyDetail() {
           </div>
         </div>
 
+        {/* Quick actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <Button
+            className="gap-2 bg-green-600 hover:bg-green-700"
+            onClick={() => setShowAddAid(true)}
+          >
+            <Gift className="w-4 h-4" />
+            Enregistrer une aide
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowAddNeed(true)}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Ajouter un besoin
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowAddNote(true)}
+          >
+            <FileText className="w-4 h-4" />
+            Ajouter une note
+          </Button>
+        </div>
+
         {/* Tabs */}
         <Tabs defaultValue="timeline" className="space-y-6">
-          <TabsList className="grid grid-cols-5 w-full max-w-xl">
+          <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full max-w-3xl">
             <TabsTrigger value="timeline">Historique</TabsTrigger>
             <TabsTrigger value="children">
               Enfants ({children.length})
@@ -304,6 +388,7 @@ export default function FamilyDetail() {
             </TabsTrigger>
             <TabsTrigger value="aids">Aides ({aids.length})</TabsTrigger>
             <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           </TabsList>
 
           {/* Timeline Tab */}
@@ -601,6 +686,69 @@ export default function FamilyDetail() {
                       <p className="text-sm text-muted-foreground whitespace-pre-line">
                         {note.content}
                       </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Documents Tab */}
+          <TabsContent value="documents">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-semibold">Documents (pièces d'identité, ordonnances…)</h2>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setShowAddDocument(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter
+                </Button>
+              </div>
+              {documents.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Aucun document enregistré
+                </p>
+              ) : (
+                <div className="grid gap-3">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between bg-gray-50 rounded-lg p-4"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{doc.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {FAMILY_DOCUMENT_TYPE_LABELS[doc.documentType]} — {doc.uploadedByName} — {format(new Date(doc.uploadedAt), "d MMM yyyy", { locale: fr })}
+                          </p>
+                        </div>
+                        <a
+                          href={doc.fileData.startsWith("data:") ? doc.fileData : `data:${doc.mimeType};base64,${doc.fileData}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline shrink-0"
+                        >
+                          Voir
+                        </a>
+                      </div>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 shrink-0"
+                          onClick={() => {
+                            if (confirm("Supprimer ce document ?")) {
+                              deleteDocumentMutation.mutate(doc.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -954,6 +1102,70 @@ export default function FamilyDetail() {
               </Button>
               <Button type="submit" disabled={addNoteMutation.isPending}>
                 Ajouter
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Document Dialog */}
+      <Dialog open={showAddDocument} onOpenChange={setShowAddDocument}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajouter un document</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const name = (form.elements.namedItem("docName") as HTMLInputElement).value;
+              const documentType = (form.elements.namedItem("docType") as HTMLSelectElement).value as FamilyDocumentType;
+              const fileInput = form.elements.namedItem("docFile") as HTMLInputElement;
+              const file = fileInput?.files?.[0];
+              if (!file || !name) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                const mimeMatch = result.match(/^data:([^;]+)/);
+                const mimeType = mimeMatch ? mimeMatch[1] : file.type || "application/octet-stream";
+                addDocumentMutation.mutate({
+                  name: name.trim(),
+                  documentType,
+                  fileData: result,
+                  mimeType,
+                });
+              };
+              reader.readAsDataURL(file);
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label>Nom du document *</Label>
+              <Input name="docName" placeholder="Ex: CIN, ordonnance Dr. X..." required />
+            </div>
+            <div className="space-y-2">
+              <Label>Type *</Label>
+              <select
+                name="docType"
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm"
+                required
+                defaultValue="other"
+              >
+                {(Object.entries(FAMILY_DOCUMENT_TYPE_LABELS) as [FamilyDocumentType, string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Fichier (image ou PDF) *</Label>
+              <Input name="docFile" type="file" accept="image/*,.pdf" required />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setShowAddDocument(false)}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={addDocumentMutation.isPending}>
+                {addDocumentMutation.isPending ? "Envoi..." : "Ajouter"}
               </Button>
             </div>
           </form>

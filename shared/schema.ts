@@ -10,6 +10,7 @@ export const UserSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   role: UserRole,
+  active: z.boolean().default(true),
 });
 export type User = z.infer<typeof UserSchema>;
 
@@ -18,6 +19,24 @@ export const LoginSchema = z.object({
   password: z.string().min(1, "Mot de passe requis"),
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
+
+export const CreateUserSchema = z.object({
+  name: z.string().min(1, "Nom requis"),
+  email: z.string().email("Email invalide"),
+  role: UserRole.default("volunteer"),
+  password: z.string().min(6, "Mot de passe requis"),
+  active: z.boolean().optional().default(true),
+});
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  role: UserRole.optional(),
+  password: z.string().min(6).optional(),
+  active: z.boolean().optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 
 // ============ CATEGORY (grouping for aid/need types) ============
 
@@ -162,6 +181,12 @@ export const CreateNeedSchema = z.object({
   details: z.string().optional().default(""),
 });
 export type CreateNeedInput = z.infer<typeof CreateNeedSchema>;
+
+/** Partial schema for updating a need (all fields optional). */
+export const UpdateNeedSchema = CreateNeedSchema.partial().extend({
+  status: NeedStatus.optional(),
+});
+export type UpdateNeedInput = z.infer<typeof UpdateNeedSchema>;
 
 // ============ AID ============
 
@@ -331,4 +356,69 @@ export const FAMILY_SITUATION_LABELS = FAMILY_HOUSING_LABELS;
 export const CHILD_SEX_LABELS: Record<ChildSex, string> = {
   male: "Garçon",
   female: "Fille",
+};
+
+// ============ AUDIT LOG ============
+
+export const AuditAction = z.enum(["created", "updated", "deleted"]);
+export type AuditAction = z.infer<typeof AuditAction>;
+
+export const AuditEntityType = z.enum([
+  "family",
+  "child",
+  "need",
+  "aid",
+  "note",
+  "category",
+  "article",
+  "user",
+]);
+export type AuditEntityType = z.infer<typeof AuditEntityType>;
+
+export const AuditLogSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  userName: z.string(),
+  action: AuditAction,
+  entityType: AuditEntityType,
+  entityId: z.string(),
+  details: z.string().optional(),
+  createdAt: z.string(),
+});
+export type AuditLog = z.infer<typeof AuditLogSchema>;
+
+// ============ FAMILY DOCUMENT ============
+
+export const FamilyDocumentType = z.enum(["id", "prescription", "other"]);
+export type FamilyDocumentType = z.infer<typeof FamilyDocumentType>;
+
+export const FAMILY_DOCUMENT_TYPE_LABELS: Record<FamilyDocumentType, string> = {
+  id: "Pièce d'identité",
+  prescription: "Ordonnance",
+  other: "Autre document",
+};
+
+export const FamilyDocumentSchema = z.object({
+  id: z.string(),
+  familyId: z.string(),
+  name: z.string(),
+  documentType: FamilyDocumentType,
+  fileData: z.string(), // base64
+  mimeType: z.string(),
+  uploadedAt: z.string(),
+  uploadedBy: z.string(),
+  uploadedByName: z.string(),
+});
+export type FamilyDocument = z.infer<typeof FamilyDocumentSchema>;
+
+export const CreateFamilyDocumentSchema = z.object({
+  familyId: z.string(),
+  name: z.string().min(1),
+  documentType: FamilyDocumentType,
+  fileData: z.string(),
+  mimeType: z.string(),
+});
+export type CreateFamilyDocumentInput = z.infer<typeof CreateFamilyDocumentSchema> & {
+  uploadedBy: string;
+  uploadedByName: string;
 };

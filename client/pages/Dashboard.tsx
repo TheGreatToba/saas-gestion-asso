@@ -35,7 +35,7 @@ import { fr } from "date-fns/locale";
 function AdminDashboard() {
   const { user } = useAuth();
   const { categories, getCategoryLabel, lowStockArticles } = useCategories();
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, error } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
     refetchInterval: 30000,
@@ -89,6 +89,11 @@ function AdminDashboard() {
       </div>
 
       {/* Stats Cards */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+          Impossible de charger les statistiques.
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {statCards.map((stat, idx) => {
           const Icon = stat.icon;
@@ -356,7 +361,7 @@ function AdminDashboard() {
 function VolunteerDashboard() {
   const { user } = useAuth();
   const { getCategoryLabel } = useCategories();
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, error } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
     refetchInterval: 30000,
@@ -417,6 +422,11 @@ function VolunteerDashboard() {
       </div>
 
       {/* Quick Actions Grid */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
+          Impossible de charger les statistiques.
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
         {quickActions.map((action) => {
           const Icon = action.icon;

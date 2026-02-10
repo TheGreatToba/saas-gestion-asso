@@ -154,6 +154,12 @@ const data: MyRouteResponse = await response.json();
 - **Binary**: Self-contained executables (Linux, macOS, Windows)
 - **Cloud Deployment**: Use either Netlify or Vercel via their MCP integrations for easy deployment. Both providers work well with this starter template.
 
+### Security before production
+
+- **Auth**: The API currently trusts the `x-user-id` header for authenticated requests. This is spoofable by the client and must be replaced by a proper mechanism (e.g. signed JWT or server-side sessions) before real production use.
+- **Passwords**: Stored as bcrypt hashes in `passwords`; plain-text legacy rows are migrated to hash on first successful login.
+- **Extra API routes**: Beyond the minimal example routes, this app adds `/api/audit-logs`, `/api/search`, and `/api/families/:familyId/documents` (see `server/index.ts`).
+
 ## Architecture Notes
 
 - Single-port development with Vite + Express integration
