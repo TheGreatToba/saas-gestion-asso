@@ -277,13 +277,24 @@ export function createServer() {
   );
 
   // Error handler
-  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(
-      `[${new Date().toISOString()}] ${req.method} ${req.url}`,
-      err,
-    );
-    res.status(500).json({ error: "Erreur serveur" });
-  });
+  app.use(
+    (
+      err: unknown,
+      req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      console.error(
+        `[${new Date().toISOString()}] ${req.method} ${req.url}`,
+        err,
+      );
+      const message =
+        !isProduction && err instanceof Error
+          ? err.message
+          : "Erreur serveur";
+      res.status(500).json({ error: message });
+    },
+  );
 
   return app;
 }
