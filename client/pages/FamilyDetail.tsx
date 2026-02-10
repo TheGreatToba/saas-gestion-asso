@@ -247,6 +247,7 @@ export default function FamilyDetail() {
                   }
                 >
                   {FAMILY_HOUSING_LABELS[family.housing]}
+                  {family.housingName && ` — ${family.housingName}`}
                 </Badge>
                 {family.hasMedicalNeeds && (
                   <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
