@@ -16,7 +16,7 @@ interface AuthContextType {
     email: string,
     password: string,
   ) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
 }

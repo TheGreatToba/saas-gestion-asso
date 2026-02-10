@@ -236,6 +236,8 @@ export type VisitNote = z.infer<typeof VisitNoteSchema>;
 
 export const CreateVisitNoteSchema = z.object({
   familyId: z.string(),
+  volunteerId: z.string(),
+  volunteerName: z.string(),
   content: z.string().min(1, "Contenu requis"),
   date: z.string(),
 });

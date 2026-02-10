@@ -41,7 +41,6 @@ export const handleCreateNote: RequestHandler = (req, res) => {
     volunteerId: user.id,
     volunteerName: user.name,
   });
-  const user = (res as any).locals?.user;
   if (user) {
     storage.appendAuditLog({
       userId: user.id,

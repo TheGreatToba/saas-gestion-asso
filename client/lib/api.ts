@@ -18,7 +18,6 @@ import type {
   CreateArticleInput,
 } from "@shared/schema";
 import { getSessionToken, clearSession } from "@/lib/session";
-import type { LoginResponse } from "@shared/api";
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getSessionToken();
