@@ -17,21 +17,10 @@ import type {
   CreateCategoryInput,
   CreateArticleInput,
 } from "@shared/schema";
-
-function getStoredToken(): string | undefined {
-  try {
-    const stored = localStorage.getItem("socialaid_session");
-    if (!stored) return undefined;
-    const session = JSON.parse(stored) as { token?: string };
-    return session?.token;
-  } catch {
-    // ignore
-  }
-  return undefined;
-}
+import { getSessionToken, clearSession } from "@/lib/session";
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = getStoredToken();
+  const token = getSessionToken();
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -43,7 +32,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: "Erreur serveur" }));
     if (res.status === 401 || error.error === "Compte désactivé") {
-      localStorage.removeItem("socialaid_session");
+      clearSession();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }

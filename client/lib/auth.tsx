@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { User } from "@shared/schema";
 import type { LoginResponse } from "@shared/api";
+import { clearSession, readSession, setSessionToken, writeSession } from "@/lib/session";
 
 interface AuthContextType {
   user: User | null;
@@ -21,31 +22,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const STORAGE_KEY = "socialaid_session";
-const LEGACY_STORAGE_KEY = "socialaid_user";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const session = JSON.parse(stored) as { user?: User; token?: string };
-        if (session?.user && session?.token) {
-          setUser(session.user);
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(LEGACY_STORAGE_KEY);
-        }
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
-      }
+    const session = readSession();
+    if (session?.user && session?.token) {
+      setUser(session.user);
+      setSessionToken(session.token);
     } else {
-      // Cleanup legacy key to avoid stale auth behavior.
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      clearSession();
     }
     setIsLoading(false);
   }, []);
@@ -65,11 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = (await res.json()) as LoginResponse;
       setUser(data.user);
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ user: data.user, token: data.token }),
-      );
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      setSessionToken(data.token);
+      writeSession({ user: data.user, token: data.token });
       return { success: true };
     } catch {
       return { success: false, error: "Erreur réseau" };
@@ -78,8 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    clearSession();
   };
 
   const isAdmin = user?.role === "admin";
