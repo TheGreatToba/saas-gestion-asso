@@ -3,7 +3,7 @@ import express, { RequestHandler } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { handleDemo } from "./routes/demo";
-import { handleLogin, handleRegister, handleGetUsers, handleLogout, handleMe } from "./routes/auth";
+import { handleLogin, handleGetUsers, handleLogout, handleMe } from "./routes/auth";
 import { handleCreateUser, handleUpdateUser } from "./routes/users";
 import {
   handleGetFamilies,
@@ -143,9 +143,6 @@ export function createServer() {
           );
           return callback(null, true);
         }
-        console.error(
-          `[CORS] Origine refusée: "${origin}". Autorisées: ${JSON.stringify(allowedOrigins)}`,
-        );
         return callback(new Error("Origine non autorisée par CORS"));
       },
     }),
@@ -166,9 +163,8 @@ export function createServer() {
   });
   app.get("/api/demo", handleDemo);
 
-  // Auth (public — login and register don't require auth)
+  // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", rateLimitLogin, handleLogin);
-  app.post("/api/auth/register", rateLimitLogin, handleRegister);
   app.get("/api/auth/me", requireAuth, handleMe);
   app.post("/api/auth/logout", requireAuth, handleLogout);
 
