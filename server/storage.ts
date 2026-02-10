@@ -681,24 +681,35 @@ class Storage {
     const categoryLabels = this.getCategoryLabels();
     const families = this.searchFamilies(query);
     const familyIds = new Set(families.map((f) => f.id));
-    const allNeeds = this.db.prepare("SELECT * FROM needs").all() as NeedRow[];
-    const allAids = this.db.prepare("SELECT * FROM aids").all() as AidRow[];
-    const needs = allNeeds.filter((n) => {
-      if (familyIds.has(n.family_id)) return true;
-      const label = (categoryLabels[n.type] || "").toLowerCase();
-      if (label.includes(q)) return true;
-      if ((n.comment || "").toLowerCase().includes(q)) return true;
-      if ((n.details || "").toLowerCase().includes(q)) return true;
-      return false;
-    });
-    const aids = allAids.filter((a) => {
-      if (familyIds.has(a.family_id)) return true;
-      const label = (categoryLabels[a.type] || "").toLowerCase();
-      if (label.includes(q)) return true;
-      if ((a.volunteer_name || "").toLowerCase().includes(q)) return true;
-      if ((a.notes || "").toLowerCase().includes(q)) return true;
-      return false;
-    });
+
+    const like = `%${q.replace(/%/g, "\\%")}%`;
+
+    const needs = this.db
+      .prepare(
+        `SELECT * FROM needs
+         WHERE family_id IN (${families.length ? families.map(() => "?").join(",") : "NULL"})
+           OR lower(comment) LIKE ?
+           OR lower(details) LIKE ?`,
+      )
+      .all(
+        ...families.map((f) => f.id),
+        like,
+        like,
+      ) as NeedRow[];
+
+    const aids = this.db
+      .prepare(
+        `SELECT * FROM aids
+         WHERE family_id IN (${families.length ? families.map(() => "?").join(",") : "NULL"})
+           OR lower(volunteer_name) LIKE ?
+           OR lower(notes) LIKE ?`,
+      )
+      .all(
+        ...families.map((f) => f.id),
+        like,
+        like,
+      ) as AidRow[];
+
     return {
       families,
       needs: needs.map(mapNeed),
@@ -880,52 +891,64 @@ class Storage {
     const id = "aid-" + generateId();
     const createdAt = now();
     const date = input.date || now();
-    this.db
-      .prepare(
-        "INSERT INTO aids (id, family_id, type, article_id, quantity, date, volunteer_id, volunteer_name, source, notes, proof_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        input.familyId,
-        input.type,
-        input.articleId ?? "",
-        input.quantity ?? 1,
-        date,
-        input.volunteerId,
-        input.volunteerName,
-        input.source,
-        input.notes ?? "",
-        input.proofUrl ?? "",
-        createdAt,
-      );
-    this.db
-      .prepare(
-        "UPDATE families SET last_visit_at = ?, updated_at = ? WHERE id = ?",
-      )
-      .run(date, now(), input.familyId);
-    if (input.articleId) {
-      const art = this.db
-        .prepare("SELECT stock_quantity FROM articles WHERE id = ?")
-        .get(input.articleId) as { stock_quantity: number } | undefined;
-      if (art) {
-        const newQty = Math.max(0, art.stock_quantity - (input.quantity ?? 1));
-        this.db
-          .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
-          .run(newQty, input.articleId);
-      }
-    }
-    const matchingNeeds = this.db
-      .prepare(
-        "SELECT * FROM needs WHERE family_id = ? AND type = ? AND status != ?",
-      )
-      .all(input.familyId, input.type, "covered") as NeedRow[];
-    const upd = now();
-    for (const need of matchingNeeds) {
-      const newStatus = need.status === "pending" ? "partial" : "covered";
+
+    const tx = this.db.transaction(() => {
       this.db
-        .prepare("UPDATE needs SET status = ?, updated_at = ? WHERE id = ?")
-        .run(newStatus, upd, need.id);
-    }
+        .prepare(
+          "INSERT INTO aids (id, family_id, type, article_id, quantity, date, volunteer_id, volunteer_name, source, notes, proof_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          id,
+          input.familyId,
+          input.type,
+          input.articleId ?? "",
+          input.quantity ?? 1,
+          date,
+          input.volunteerId,
+          input.volunteerName,
+          input.source,
+          input.notes ?? "",
+          input.proofUrl ?? "",
+          createdAt,
+        );
+
+      this.db
+        .prepare(
+          "UPDATE families SET last_visit_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(date, now(), input.familyId);
+
+      if (input.articleId) {
+        const art = this.db
+          .prepare("SELECT stock_quantity FROM articles WHERE id = ?")
+          .get(input.articleId) as { stock_quantity: number } | undefined;
+        if (art) {
+          const newQty = Math.max(
+            0,
+            art.stock_quantity - (input.quantity ?? 1),
+          );
+          this.db
+            .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
+            .run(newQty, input.articleId);
+        }
+      }
+
+      const matchingNeeds = this.db
+        .prepare(
+          "SELECT * FROM needs WHERE family_id = ? AND type = ? AND status != ?",
+        )
+        .all(input.familyId, input.type, "covered") as NeedRow[];
+      const upd = now();
+      for (const need of matchingNeeds) {
+        const newStatus = need.status === "pending" ? "partial" : "covered";
+        this.db
+          .prepare("UPDATE needs SET status = ?, updated_at = ? WHERE id = ?")
+          .run(newStatus, upd, need.id);
+      }
+    });
+
+    tx();
+
     const row = this.db
       .prepare("SELECT * FROM aids WHERE id = ?")
       .get(id) as AidRow;
@@ -1043,15 +1066,36 @@ class Storage {
 
   // ==================== EXPORT ====================
 
-  getExportData() {
+  getExportData(opts?: { limit?: number; offset?: number }) {
+    const limit = opts?.limit ?? 200;
+    const offset = opts?.offset ?? 0;
+
+    const familiesRows = this.db
+      .prepare(
+        "SELECT * FROM families ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+      )
+      .all(limit, offset) as FamilyRow[];
+    const families = familiesRows.map(mapFamily);
+
+    const familiesWithRelations = families.map((f) => ({
+      ...f,
+      children: this.getChildrenByFamily(f.id),
+      needs: this.getNeedsByFamily(f.id),
+      aids: this.getAidsByFamily(f.id),
+    }));
+
+    const totalFamiliesRow = this.db
+      .prepare("SELECT COUNT(*) as c FROM families")
+      .get() as { c: number };
+
     return {
-      families: this.getAllFamilies().map((f) => ({
-        ...f,
-        children: this.getChildrenByFamily(f.id),
-        needs: this.getNeedsByFamily(f.id),
-        aids: this.getAidsByFamily(f.id),
-      })),
+      families: familiesWithRelations,
       stats: this.getDashboardStats(),
+      pagination: {
+        limit,
+        offset,
+        totalFamilies: totalFamiliesRow.c,
+      },
     };
   }
 

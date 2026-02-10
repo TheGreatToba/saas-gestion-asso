@@ -5,6 +5,11 @@ const LEGACY_STORAGE_KEY = "socialaid_user";
 
 let cachedToken: string | null = null;
 
+/**
+ * Prefer reading the token from an in-memory cache populated during login.
+ * For backwards-compatibility with older sessions, we still read from
+ * localStorage, but new logins no longer persist the token there.
+ */
 export function getSessionToken(): string | undefined {
   if (cachedToken) return cachedToken;
   try {
@@ -22,6 +27,10 @@ export function setSessionToken(token: string | null) {
   cachedToken = token;
 }
 
+/**
+ * Read session for UI purposes (user object). The token may be undefined if
+ * the session comes from the HttpOnly cookie only.
+ */
 export function readSession(): { user?: User; token?: string } | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,9 +41,18 @@ export function readSession(): { user?: User; token?: string } | null {
   }
 }
 
+/**
+ * Persist only the user in localStorage; the token is now primarily stored in
+ * an HttpOnly cookie on the server side, with an in-memory cache for the rare
+ * cases where Authorization header is still used.
+ */
 export function writeSession(session: { user: User; token: string }) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    cachedToken = session.token;
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ user: session.user }),
+    );
   } catch {
     // ignore storage errors (private mode, quota, etc.)
   }

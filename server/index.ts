@@ -58,18 +58,23 @@ import {
 } from "./routes/documents";
 import { storage } from "./storage";
 import { verifyAuthToken } from "./auth-token";
+import { rateLimitLogin } from "./rate-limit";
 
 const isProduction = process.env.NODE_ENV === "production";
 
 // ---------- Auth Middleware ----------
 
 /**
- * Requires a valid bearer token in Authorization header.
- * Attaches the user to res.locals.user.
+ * Requires a valid auth token, either from Authorization header (Bearer)
+ * or from the "auth_token" cookie. Attaches the user to res.locals.user.
  */
 const requireAuth: RequestHandler = (req, res, next) => {
   const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  const headerToken = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  // Prefer header token if present (for backwards-compatibility during migration)
+  const cookieToken =
+    (req as any).cookies?.auth_token ?? (req as any).signedCookies?.auth_token;
+  const token = headerToken ?? cookieToken;
   if (!token) {
     res.status(401).json({ error: "Authentification requise" });
     return;
@@ -156,7 +161,7 @@ export function createServer() {
   app.get("/api/demo", handleDemo);
 
   // Auth (public — login doesn't require auth)
-  app.post("/api/auth/login", handleLogin);
+  app.post("/api/auth/login", rateLimitLogin, handleLogin);
 
   // Categories (public read, admin write)
   app.get("/api/categories", handleGetCategories);

@@ -215,8 +215,19 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // Export
-  getExportData: () => fetchJson<any>("/api/export"),
+  // Export (paginated)
+  getExportData: (params?: { limit?: number; offset?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.limit !== undefined) {
+      searchParams.set("limit", String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      searchParams.set("offset", String(params.offset));
+    }
+    const query = searchParams.toString();
+    const url = query ? `/api/export?${query}` : "/api/export";
+    return fetchJson<any>(url);
+  },
 
   importFamilies: (payload: {
     rows: Partial<CreateFamilyInput>[];
