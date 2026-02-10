@@ -1,6 +1,9 @@
 import Database from "better-sqlite3";
+import bcrypt from "bcrypt";
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+
+const BCRYPT_ROUNDS = 10;
 
 // Use cwd so the DB lives outside dist/ and persists across builds
 const dataDir = join(process.cwd(), "data");
@@ -160,11 +163,11 @@ function seedIfEmpty(database: Database.Database): void {
     "INSERT INTO passwords (user_id, password) VALUES (?, ?)"
   );
   insUser.run("usr-admin", "Administrateur", "admin@socialaid.org", "admin");
-  insPass.run("usr-admin", "admin123");
+  insPass.run("usr-admin", bcrypt.hashSync("admin123", BCRYPT_ROUNDS));
   insUser.run("usr-vol1", "Fatima Mansouri", "fatima@socialaid.org", "volunteer");
-  insPass.run("usr-vol1", "volunteer123");
+  insPass.run("usr-vol1", bcrypt.hashSync("volunteer123", BCRYPT_ROUNDS));
   insUser.run("usr-vol2", "Mohamed Kaddouri", "mohamed@socialaid.org", "volunteer");
-  insPass.run("usr-vol2", "volunteer123");
+  insPass.run("usr-vol2", bcrypt.hashSync("volunteer123", BCRYPT_ROUNDS));
 
   const insCat = database.prepare(
     "INSERT INTO categories (id, name, description, created_at) VALUES (?, ?, ?, ?)"

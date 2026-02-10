@@ -19,6 +19,7 @@ import type {
   FamilyDocument,
   CreateFamilyDocumentInput,
 } from "../shared/schema";
+import bcrypt from "bcrypt";
 import { getDb } from "./db";
 import type Database from "better-sqlite3";
 
@@ -191,7 +192,14 @@ class Storage {
     const user = this.db.prepare("SELECT id, name, email, role FROM users WHERE email = ?").get(email) as UserRow | undefined;
     if (!user) return null;
     const row = this.db.prepare("SELECT password FROM passwords WHERE user_id = ?").get(user.id) as { password: string } | undefined;
-    if (!row || row.password !== password) return null;
+    if (!row) return null;
+    const stored = row.password;
+    const valid = stored.startsWith("$2") ? bcrypt.compareSync(password, stored) : stored === password;
+    if (!valid) return null;
+    // Migrate legacy plain-text password to hash on first successful login
+    if (!stored.startsWith("$2")) {
+      this.db.prepare("UPDATE passwords SET password = ? WHERE user_id = ?").run(bcrypt.hashSync(password, 10), user.id);
+    }
     return mapUser(user);
   }
 

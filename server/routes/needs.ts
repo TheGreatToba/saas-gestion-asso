@@ -1,5 +1,5 @@
 import { RequestHandler } from "express";
-import { CreateNeedSchema, computeNeedPriority, getPriorityLevel } from "../../shared/schema";
+import { CreateNeedSchema, UpdateNeedSchema, computeNeedPriority, getPriorityLevel } from "../../shared/schema";
 import { storage } from "../storage";
 import type { Need } from "../../shared/schema";
 
@@ -59,7 +59,12 @@ export const handleCreateNeed: RequestHandler = (req, res) => {
 };
 
 export const handleUpdateNeed: RequestHandler = (req, res) => {
-  const need = storage.updateNeed(req.params.id as string, req.body);
+  const parsed = UpdateNeedSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Données invalides", details: parsed.error.flatten() });
+    return;
+  }
+  const need = storage.updateNeed(req.params.id as string, parsed.data);
   if (!need) {
     res.status(404).json({ error: "Besoin non trouvé" });
     return;

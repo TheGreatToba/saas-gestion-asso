@@ -163,6 +163,12 @@ export const CreateNeedSchema = z.object({
 });
 export type CreateNeedInput = z.infer<typeof CreateNeedSchema>;
 
+/** Partial schema for updating a need (all fields optional). */
+export const UpdateNeedSchema = CreateNeedSchema.partial().extend({
+  status: NeedStatus.optional(),
+});
+export type UpdateNeedInput = z.infer<typeof UpdateNeedSchema>;
+
 // ============ AID ============
 
 export const AidSource = z.enum(["donation", "purchase", "partner"]);
