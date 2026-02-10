@@ -113,12 +113,26 @@ export function createServer() {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+  // Health check (for load balancers)
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   // Legacy routes (public)
   app.get("/api/ping", (_req, res) => {
     const ping = process.env.PING_MESSAGE ?? "ping";
     res.json({ message: ping });
   });
   app.get("/api/demo", handleDemo);
+
+  // Debug: Check if demo users exist
+  app.get("/api/debug/users", (_req, res) => {
+    const users = storage.getAllUsers();
+    res.json({
+      total: users.length,
+      users: users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role }))
+    });
+  });
 
   // Auth (public — login doesn't require auth)
   app.post("/api/auth/login", handleLogin);
