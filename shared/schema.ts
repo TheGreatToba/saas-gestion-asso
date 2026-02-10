@@ -234,14 +234,23 @@ export const VisitNoteSchema = z.object({
 });
 export type VisitNote = z.infer<typeof VisitNoteSchema>;
 
+/**
+ * Base payload envoyé par le client pour créer une note de visite.
+ * Les champs volunteerId / volunteerName sont injectés côté serveur
+ * à partir de l'utilisateur authentifié (res.locals.user).
+ */
 export const CreateVisitNoteSchema = z.object({
   familyId: z.string(),
-  volunteerId: z.string(),
-  volunteerName: z.string(),
   content: z.string().min(1, "Contenu requis"),
   date: z.string(),
 });
-export type CreateVisitNoteInput = z.infer<typeof CreateVisitNoteSchema>;
+
+// Type étendu utilisé côté storage (server-only),
+// qui inclut les informations de bénévole.
+export type CreateVisitNoteInput = z.infer<typeof CreateVisitNoteSchema> & {
+  volunteerId: string;
+  volunteerName: string;
+};
 
 // ============ DASHBOARD ============
 
