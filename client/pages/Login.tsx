@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Heart, LogIn, Eye, EyeOff } from "lucide-react";
+import { ROUTES } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,6 +117,13 @@ export default function Login() {
               )}
             </Button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Pas encore de compte ?{" "}
+            <Link to={ROUTES.register} className="text-primary font-medium hover:underline">
+              Créer un compte
+            </Link>
+          </p>
 
           {/* Demo accounts - only shown in non-production environments */}
           {IS_DEMO_ENV && (

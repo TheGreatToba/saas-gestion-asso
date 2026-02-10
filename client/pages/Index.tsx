@@ -11,6 +11,7 @@ import {
   CheckCircle,
   ArrowRight,
   LogIn,
+  UserPlus,
 } from "lucide-react";
 
 export default function Index() {
@@ -31,12 +32,20 @@ export default function Index() {
                 </p>
               </div>
             </Link>
-            <Link to="/login">
-              <Button className="gap-2">
-                <LogIn className="w-4 h-4" />
-                Se connecter
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link to="/register">
+                <Button variant="outline" className="gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Créer un compte
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button className="gap-2">
+                  <LogIn className="w-4 h-4" />
+                  Se connecter
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -58,9 +67,15 @@ export default function Index() {
               suivre les besoins réels, et apporter une aide adaptée et dignifiante.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/login">
+              <Link to="/register">
                 <Button size="lg" className="gap-2">
-                  Commencer maintenant <ArrowRight className="w-4 h-4" />
+                  Créer un compte <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button size="lg" variant="outline" className="gap-2">
+                  <LogIn className="w-4 h-4" />
+                  Se connecter
                 </Button>
               </Link>
               <a href="#features">
@@ -269,15 +284,26 @@ export default function Index() {
             Commencez dès maintenant avec un accès complet à la plateforme.
             Aucune configuration nécessaire.
           </p>
-          <Link to="/login">
-            <Button
-              size="lg"
-              variant="secondary"
-              className="gap-2 text-primary hover:text-primary/80"
-            >
-              Se connecter <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/register">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="gap-2 text-primary hover:text-primary/80"
+              >
+                Créer un compte <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Link to="/login">
+              <Button
+                size="lg"
+                variant="outline"
+                className="gap-2 bg-white/20 border-white/40 text-white hover:bg-white/30"
+              >
+                Se connecter
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 

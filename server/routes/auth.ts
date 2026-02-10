@@ -1,5 +1,5 @@
 import { RequestHandler } from "express";
-import { LoginSchema } from "../../shared/schema";
+import { LoginSchema, RegisterSchema } from "../../shared/schema";
 import { storage } from "../storage";
 import { createAuthToken } from "../auth-token";
 
@@ -37,6 +37,37 @@ export const handleLogin: RequestHandler = (req, res) => {
   });
 
   res.json({ user: result.user, token });
+};
+
+export const handleRegister: RequestHandler = (req, res) => {
+  const parsed = RegisterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "Données invalides", details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const user = storage.createUser({
+      name: parsed.data.name,
+      email: parsed.data.email,
+      password: parsed.data.password,
+      role: "volunteer",
+      active: true,
+    });
+    const token = createAuthToken(user.id);
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 12,
+    });
+    res.status(201).json({ user, token });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erreur serveur";
+    res.status(400).json({ error: message });
+  }
 };
 
 export const handleMe: RequestHandler = (_req, res) => {

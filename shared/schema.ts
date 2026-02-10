@@ -20,6 +20,14 @@ export const LoginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof LoginSchema>;
 
+/** Public registration: name, email, password only (role/active set server-side). */
+export const RegisterSchema = z.object({
+  name: z.string().min(1, "Nom requis"),
+  email: z.string().email("Email invalide"),
+  password: z.string().min(6, "Mot de passe : 6 caractères minimum"),
+});
+export type RegisterInput = z.infer<typeof RegisterSchema>;
+
 export const CreateUserSchema = z.object({
   name: z.string().min(1, "Nom requis"),
   email: z.string().email("Email invalide"),

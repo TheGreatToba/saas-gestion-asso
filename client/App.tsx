@@ -11,6 +11,7 @@ import type { User } from "@shared/schema";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Families from "./pages/Families";
 import FamilyDetail from "./pages/FamilyDetail";
@@ -116,6 +117,7 @@ export default function App() {
             <Routes>
               <Route path={ROUTES.home} element={<Index />} />
               <Route path={ROUTES.login} element={<Login />} />
+              <Route path={ROUTES.register} element={<Register />} />
               <Route
                 path={ROUTES.dashboard}
                 element={

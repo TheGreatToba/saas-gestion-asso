@@ -16,6 +16,11 @@ interface AuthContextType {
     email: string,
     password: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
@@ -79,6 +84,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const register = async (data: {
+    name: string;
+    email: string;
+    password: string;
+  }) => {
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: responseData.error || "Erreur lors de l'inscription",
+        };
+      }
+
+      const { user, token } = responseData as LoginResponse;
+      writeSession({ user, token });
+      setUser(user);
+      return { success: true };
+    } catch {
+      return { success: false, error: "Erreur réseau" };
+    }
+  };
+
   const logout = async () => {
     try {
       // Demander au serveur d'invalider le cookie auth_token.
@@ -99,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === "admin";
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, isAdmin }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
