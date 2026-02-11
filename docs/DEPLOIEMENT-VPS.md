@@ -104,6 +104,8 @@ NODE_ENV=production
 AUTH_SECRET=GENERER_UN_SECRET_LONG_ET_ALEATOIRE_ICI
 
 # CORS : l’URL d’accès = http://IP:3000 (sans domaine on utilise l’IP)
+# ⚠️ OBLIGATOIRE : utilise EXACTEMENT l’URL avec laquelle tu ouvres le site.
+#    Si CORS_ORIGINS ne contient pas cette URL, tu auras un écran blanc (500 sur /assets/*).
 CORS_ORIGINS=http://IP_DE_TON_VPS:3000
 
 # Port sur lequel écoute l’app (défaut 3000)
@@ -274,6 +276,7 @@ Si tu as changé des variables d’environnement dans `.env`, un simple `pm2 res
 
 ## Dépannage
 
+- **Écran blanc + erreurs 500 sur `/assets/*` dans la console** : en production, le serveur rejette les requêtes dont l’origine n’est pas autorisée. Ajoute dans `.env` l’URL exacte d’accès au site : `CORS_ORIGINS=http://46.202.173.225:3000` (remplace par ton IP si besoin), puis redémarre l’app (`pm2 restart aide-famille-hub`).
 - **Page inaccessible / timeout** : le port 3000 n’est peut-être pas ouvert. Vérifie le pare-feu (section 6) et les règles dans le panel de ton hébergeur.
 - **CORS / requêtes bloquées** : `CORS_ORIGINS` doit être **exactement** l’URL que tu tapes dans le navigateur (ex. `http://51.83.42.100:3000`), sans slash final.
 - **Session invalide / 401** : vérifie que `AUTH_SECRET` n’a pas été modifié entre deux redémarrages.
