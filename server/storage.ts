@@ -1065,6 +1065,12 @@ class Storage {
     return mapAid(row);
   }
 
+  deleteAid(id: string): boolean {
+    return (
+      this.db.prepare("DELETE FROM aids WHERE id = ?").run(id).changes > 0
+    );
+  }
+
   // ==================== VISIT NOTES ====================
 
   getNotesByFamily(familyId: string): VisitNote[] {

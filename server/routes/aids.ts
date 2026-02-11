@@ -13,7 +13,9 @@ export const handleGetAidsByFamily: RequestHandler = (req, res) => {
 export const handleCreateAid: RequestHandler = (req, res) => {
   const parsed = CreateAidSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Données invalides", details: parsed.error.flatten() });
+    res
+      .status(400)
+      .json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
 
@@ -40,4 +42,24 @@ export const handleCreateAid: RequestHandler = (req, res) => {
     });
   }
   res.status(201).json(aid);
+};
+
+export const handleDeleteAid: RequestHandler = (req, res) => {
+  const id = req.params.id as string;
+  const success = storage.deleteAid(id);
+  if (!success) {
+    res.status(404).json({ error: "Aide non trouvée" });
+    return;
+  }
+  const user = (res as any).locals?.user;
+  if (user) {
+    storage.appendAuditLog({
+      userId: user.id,
+      userName: user.name,
+      action: "deleted",
+      entityType: "aid",
+      entityId: id,
+    });
+  }
+  res.json({ success: true });
 };

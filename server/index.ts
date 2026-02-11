@@ -35,6 +35,7 @@ import {
   handleGetAids,
   handleGetAidsByFamily,
   handleCreateAid,
+  handleDeleteAid,
 } from "./routes/aids";
 import { handleGetNotes, handleCreateNote } from "./routes/notes";
 import {
@@ -360,6 +361,12 @@ export function createServer() {
   // Aids (authenticated)
   app.get("/api/aids", requireAuth, asyncHandler(handleGetAids));
   app.post("/api/aids", requireAuth, asyncHandler(handleCreateAid));
+  app.delete(
+    "/api/aids/:id",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handleDeleteAid),
+  );
   app.get(
     "/api/families/:familyId/aids",
     requireAuth,
