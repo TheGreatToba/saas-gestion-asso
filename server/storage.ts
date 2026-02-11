@@ -53,6 +53,7 @@ function mapUser(r: UserRow): User {
 
 type FamilyRow = {
   id: string;
+  number: number | null;
   responsible_name: string;
   phone: string;
   address: string;
@@ -72,6 +73,7 @@ type FamilyRow = {
 function mapFamily(r: FamilyRow): Family {
   return {
     id: r.id,
+    number: r.number ?? 0,
     responsibleName: r.responsible_name,
     phone: r.phone,
     address: r.address,
@@ -611,7 +613,7 @@ class Storage {
   getAllFamilies(): Family[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM families WHERE archived = 0 ORDER BY updated_at DESC",
+        "SELECT * FROM families WHERE archived = 0 ORDER BY (number IS NULL), number ASC, created_at ASC",
       )
       .all() as FamilyRow[];
     return rows.map(mapFamily);
@@ -638,16 +640,22 @@ class Storage {
     }
 
     const id = "fam-" + generateId();
+    // Prochain numéro séquentiel : max(number) + 1 (en ignorant les NULL)
+    const row = this.db
+      .prepare("SELECT MAX(number) as maxNumber FROM families")
+      .get() as { maxNumber: number | null };
+    const nextNumber = (row?.maxNumber ?? 0) + 1;
     const createdAt = now();
     const updatedAt = now();
     this.db
       .prepare(
-        `INSERT INTO families (id, responsible_name, phone, address, neighborhood, member_count, children_count,
+        `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
          housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(
         id,
+        nextNumber,
         input.responsibleName,
         input.phone,
         input.address,

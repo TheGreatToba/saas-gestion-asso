@@ -311,8 +311,13 @@ export default function FamilyDetail() {
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <h1 className="text-2xl font-bold text-foreground">
-                  {family.responsibleName}
+                <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                  <span>{family.responsibleName}</span>
+                  {family.number > 0 && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                      N° {family.number}
+                    </span>
+                  )}
                 </h1>
                 <Badge
                   variant="outline"

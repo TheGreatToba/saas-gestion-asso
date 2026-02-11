@@ -96,6 +96,8 @@ export type FamilySituation = FamilyHousing;
 
 export const FamilySchema = z.object({
   id: z.string(),
+  // Numéro séquentiel lisible (1, 2, 3, ...) attribué à l'enregistrement
+  number: z.number().int(),
   responsibleName: z.string().min(1, "Nom requis"),
   phone: z.string(),
   address: z.string(),

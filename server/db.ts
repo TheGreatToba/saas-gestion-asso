@@ -53,6 +53,8 @@ function runMigrations(database: Database.Database): void {
     );
     CREATE TABLE IF NOT EXISTS families (
       id TEXT PRIMARY KEY,
+      -- Numéro séquentiel lisible (1, 2, 3, ...) attribué à l'enregistrement
+      number INTEGER,
       responsible_name TEXT NOT NULL,
       phone TEXT NOT NULL,
       address TEXT NOT NULL,
@@ -153,10 +155,12 @@ function runMigrations(database: Database.Database): void {
     .all() as { name: string }[];
   const hasActive = userColumns.some((col) => col.name === "active");
   if (!hasActive) {
-    database.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+    database.exec(
+      "ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1;",
+    );
   }
 
-  // Ajout rétro-compatible de la colonne archived sur families pour le soft-delete.
+  // Ajouts rétro-compatibles sur la table families.
   const familyColumns = database
     .prepare("PRAGMA table_info(families)")
     .all() as { name: string }[];
@@ -167,11 +171,38 @@ function runMigrations(database: Database.Database): void {
     );
   }
 
+  const hasNumber = familyColumns.some((col) => col.name === "number");
+  if (!hasNumber) {
+    // Colonne pour le numéro séquentiel lisible (1, 2, 3, ...)
+    database.exec("ALTER TABLE families ADD COLUMN number INTEGER;");
+
+    // Backfill : attribuer un numéro aux familles existantes, par ordre de création
+    const existingFamilies = database
+      .prepare(
+        "SELECT id FROM families WHERE archived = 0 ORDER BY created_at ASC",
+      )
+      .all() as { id: string }[];
+
+    const updateStmt = database.prepare(
+      "UPDATE families SET number = ? WHERE id = ?",
+    );
+    const txFamilies = database.transaction(() => {
+      let current = 1;
+      for (const fam of existingFamilies) {
+        updateStmt.run(current, fam.id);
+        current += 1;
+      }
+    });
+    txFamilies();
+  }
+
   // Ajout rétro-compatible de la colonne file_key pour les installations existantes.
   const familyDocumentColumns = database
     .prepare("PRAGMA table_info(family_documents)")
     .all() as { name: string }[];
-  const hasFileKey = familyDocumentColumns.some((col) => col.name === "file_key");
+  const hasFileKey = familyDocumentColumns.some(
+    (col) => col.name === "file_key",
+  );
   if (!hasFileKey) {
     database.exec("ALTER TABLE family_documents ADD COLUMN file_key TEXT;");
   }

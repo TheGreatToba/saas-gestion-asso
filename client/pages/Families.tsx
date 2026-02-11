@@ -249,6 +249,11 @@ export default function Families() {
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      {family.number > 0 && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                          N° {family.number}
+                        </span>
+                      )}
                       <Link
                         to={`/families/${family.id}`}
                         className="text-lg font-semibold text-foreground hover:text-primary transition truncate"
