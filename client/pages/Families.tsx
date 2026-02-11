@@ -39,14 +39,19 @@ import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
-const emptyForm: CreateFamilyInput = {
+type FamilyForm = Omit<CreateFamilyInput, "housing"> & {
+  housing: FamilyHousing | "";
+};
+
+const emptyForm: FamilyForm = {
   responsibleName: "",
   phone: "",
   address: "",
   neighborhood: "",
   memberCount: 1,
   childrenCount: 0,
-  housing: "not_housed",
+  // Valeur vide par défaut : l'utilisateur doit choisir un des 3 statuts
+  housing: "",
   housingName: "",
   healthNotes: "",
   hasMedicalNeeds: false,
@@ -61,7 +66,7 @@ export default function Families() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
-  const [form, setForm] = useState<CreateFamilyInput>(emptyForm);
+  const [form, setForm] = useState<FamilyForm>(emptyForm);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -122,10 +127,25 @@ export default function Families() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // L'hébergement est obligatoire : il faut choisir un des 3 statuts
+    if (!form.housing) {
+      toast({
+        title: "Statut d'hébergement requis",
+        description: "Veuillez sélectionner un des trois statuts d'hébergement.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const payload: CreateFamilyInput = {
+      ...form,
+      housing: form.housing,
+    };
+
     if (editingFamily) {
-      updateMutation.mutate({ id: editingFamily.id, data: form });
+      updateMutation.mutate({ id: editingFamily.id, data: payload });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload);
     }
   };
 
@@ -361,26 +381,24 @@ export default function Families() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Quartier *</Label>
+                  <Label>Quartier</Label>
                   <Input
                     value={form.neighborhood}
                     onChange={(e) =>
                       setForm({ ...form, neighborhood: e.target.value })
                     }
                     placeholder="Nom du quartier"
-                    required
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Adresse *</Label>
+                <Label>Adresse</Label>
                 <Input
                   value={form.address}
                   onChange={(e) =>
                     setForm({ ...form, address: e.target.value })
                   }
                   placeholder="Adresse complète"
-                  required
                   autoComplete="street-address"
                 />
               </div>
@@ -416,7 +434,7 @@ export default function Families() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Hébergement (foyer)</Label>
+                  <Label>Hébergement (foyer) *</Label>
                   <Select
                     value={form.housing}
                     onValueChange={(v: FamilyHousing) =>
@@ -424,7 +442,7 @@ export default function Families() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Sélectionner un statut" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="housed">Hébergé en foyer</SelectItem>
