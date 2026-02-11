@@ -787,6 +787,17 @@ class Storage {
     return info.changes ?? 0;
   }
 
+  /**
+   * Supprime définitivement TOUTES les familles (hard reset).
+   * Utiliser avec précaution : ceci efface aussi tous les enfants,
+   * besoins, aides, notes et documents associés via ON DELETE CASCADE.
+   * Les utilisateurs / comptes restent intacts.
+   */
+  resetAllFamilies(): number {
+    const info = this.db.prepare("DELETE FROM families").run();
+    return info.changes ?? 0;
+  }
+
   searchFamilies(query: string): Family[] {
     const q = "%" + query.toLowerCase().replace(/%/g, "\\%") + "%";
     const rows = this.db

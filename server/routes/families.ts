@@ -91,3 +91,9 @@ export const handlePurgeArchivedFamilies: RequestHandler = (_req, res) => {
   const purged = storage.purgeArchivedFamilies();
   res.json({ purged });
 };
+
+/** Hard reset : supprime définitivement TOUTES les familles (admin seulement). */
+export const handleResetAllFamilies: RequestHandler = (_req, res) => {
+  const purged = storage.resetAllFamilies();
+  res.json({ purged });
+};

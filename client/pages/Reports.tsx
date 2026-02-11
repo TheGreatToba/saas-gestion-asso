@@ -24,7 +24,7 @@ import {
   Upload,
   AlertCircle,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
@@ -103,6 +103,7 @@ const FIELD_ALIASES: Record<FieldKey, string[]> = {
 
 export default function Reports() {
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const { categories, getCategoryLabel } = useCategories();
   const [exporting, setExporting] = useState(false);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -120,6 +121,26 @@ export default function Reports() {
   const { data: families = [] } = useQuery({
     queryKey: ["families"],
     queryFn: () => api.getFamilies(),
+  });
+
+  // Admin: reset complet des familles (hard delete)
+  const resetFamiliesMutation = useMutation({
+    mutationFn: api.resetAllFamilies,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["families"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      toast({
+        title: "Familles réinitialisées",
+        description: `${data.purged} famille(s) ont été supprimées.`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Erreur lors de la réinitialisation",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: needs = [] } = useQuery({
@@ -526,17 +547,38 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* Import CSV (admin only) */}
+        {/* Import CSV + reset familles (admin only) */}
         {isAdmin && (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
                 <Upload className="w-5 h-5" />
-                Import CSV (familles)
-              </h2>
-              <Button variant="outline" size="sm" onClick={downloadTemplate}>
-                Télécharger un modèle
-              </Button>
+                <h2 className="text-lg font-semibold">Import CSV (familles)</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={downloadTemplate}>
+                  Télécharger un modèle
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  disabled={resetFamiliesMutation.isPending}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        "Cette action va supprimer TOUTES les familles (et leurs enfants, besoins, aides, notes, documents), mais conservera les comptes utilisateurs.\n\nEs-tu sûr de vouloir réinitialiser toutes les familles ?",
+                      )
+                    ) {
+                      return;
+                    }
+                    resetFamiliesMutation.mutate();
+                  }}
+                >
+                  Supprimer toutes les familles
+                </Button>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
               Import initial ou reprise de données. La détection des doublons se

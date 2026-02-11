@@ -18,6 +18,7 @@ import {
   handleUpdateFamily,
   handleDeleteFamily,
   handlePurgeArchivedFamilies,
+  handleResetAllFamilies,
 } from "./routes/families";
 import {
   handleGetChildren,
@@ -339,6 +340,12 @@ export function createServer() {
     requireAuth,
     requireAdmin,
     asyncHandler(handlePurgeArchivedFamilies),
+  );
+  app.post(
+    "/api/families/reset-all",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handleResetAllFamilies),
   );
 
   // Children (authenticated, delete = admin only)

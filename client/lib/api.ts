@@ -211,6 +211,16 @@ export const api = {
       method: "DELETE",
     }),
 
+  // Admin: reset / purge familles
+  resetAllFamilies: () =>
+    fetchJson<{ purged: number }>("/api/families/reset-all", {
+      method: "POST",
+    }),
+  purgeArchivedFamilies: () =>
+    fetchJson<{ purged: number }>("/api/families/purge-archived", {
+      method: "POST",
+    }),
+
   // Children
   getChildren: (familyId: string) =>
     fetchJson<Child[]>(`/api/families/${familyId}/children`),
