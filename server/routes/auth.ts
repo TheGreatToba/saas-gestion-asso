@@ -66,6 +66,7 @@ export const handleRegister: RequestHandler = (req, res) => {
     res.status(201).json({ user, token });
   } catch (err) {
     const raw = err instanceof Error ? err.message : "Erreur serveur";
+    console.error("[auth/register]", err);
     // Ne pas exposer les erreurs techniques (ex. better-sqlite3 bindings) au client
     const isTechnical = /bindings|sqlite|node\.node|ENOENT/i.test(raw);
     res.status(400).json({
