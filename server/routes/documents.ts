@@ -98,16 +98,27 @@ export const handleCreateFamilyDocument: RequestHandler = async (req, res) => {
       buffer,
     });
 
-    // Crée l'enregistrement logique (avec fileKey)
-    const doc = storage.createFamilyDocumentRecord({
-      familyId,
-      name,
-      documentType,
-      mimeType,
-      fileKey: upload.key,
-      uploadedBy: user.id,
-      uploadedByName: user.name,
-    });
+    let doc;
+    try {
+      // Crée l'enregistrement logique (avec fileKey)
+      doc = storage.createFamilyDocumentRecord({
+        familyId,
+        name,
+        documentType,
+        mimeType,
+        fileKey: upload.key,
+        uploadedBy: user.id,
+        uploadedByName: user.name,
+      });
+    } catch (dbErr) {
+      // Si l'insertion DB échoue, on tente de nettoyer l'objet pour éviter les orphelins
+      try {
+        await deleteObjectByKey(upload.key);
+      } catch (cleanupErr) {
+        console.error("[documents] Échec nettoyage objet orphelin après erreur DB", cleanupErr);
+      }
+      throw dbErr;
+    }
 
     // Générer immédiatement une URL signée pour le retour API
     let downloadUrl: string | undefined;

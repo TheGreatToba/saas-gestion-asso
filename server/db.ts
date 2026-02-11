@@ -28,8 +28,8 @@ function runMigrations(database: Database.Database): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL,
-      active INTEGER NOT NULL DEFAULT 1
+      role TEXT NOT NULL CHECK (role IN ('admin', 'volunteer')),
+      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
     );
     CREATE TABLE IF NOT EXISTS passwords (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -47,8 +47,8 @@ function runMigrations(database: Database.Database): void {
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       unit TEXT NOT NULL DEFAULT 'unités',
-      stock_quantity INTEGER NOT NULL DEFAULT 0,
-      stock_min INTEGER NOT NULL DEFAULT 0,
+      stock_quantity INTEGER NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
+      stock_min INTEGER NOT NULL DEFAULT 0 CHECK (stock_min >= 0),
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS families (
@@ -57,23 +57,24 @@ function runMigrations(database: Database.Database): void {
       phone TEXT NOT NULL,
       address TEXT NOT NULL,
       neighborhood TEXT NOT NULL,
-      member_count INTEGER NOT NULL,
-      children_count INTEGER NOT NULL,
-      housing TEXT NOT NULL,
+      member_count INTEGER NOT NULL CHECK (member_count >= 1),
+      children_count INTEGER NOT NULL CHECK (children_count >= 0),
+      housing TEXT NOT NULL CHECK (housing IN ('housed', 'pending_placement', 'not_housed')),
       housing_name TEXT NOT NULL DEFAULT '',
       health_notes TEXT NOT NULL DEFAULT '',
-      has_medical_needs INTEGER NOT NULL DEFAULT 0,
+      has_medical_needs INTEGER NOT NULL DEFAULT 0 CHECK (has_medical_needs IN (0, 1)),
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      last_visit_at TEXT
+      last_visit_at TEXT,
+      archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))
     );
     CREATE TABLE IF NOT EXISTS children (
       id TEXT PRIMARY KEY,
       family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
       first_name TEXT NOT NULL,
-      age INTEGER NOT NULL,
-      sex TEXT NOT NULL,
+      age INTEGER NOT NULL CHECK (age >= 0),
+      sex TEXT NOT NULL CHECK (sex IN ('male', 'female')),
       specific_needs TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL
     );
@@ -81,8 +82,8 @@ function runMigrations(database: Database.Database): void {
       id TEXT PRIMARY KEY,
       family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
       type TEXT NOT NULL,
-      urgency TEXT NOT NULL,
-      status TEXT NOT NULL,
+      urgency TEXT NOT NULL CHECK (urgency IN ('low', 'medium', 'high')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'partial', 'covered')),
       comment TEXT NOT NULL DEFAULT '',
       details TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
@@ -93,11 +94,11 @@ function runMigrations(database: Database.Database): void {
       family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
       type TEXT NOT NULL,
       article_id TEXT NOT NULL DEFAULT '',
-      quantity REAL NOT NULL,
+      quantity REAL NOT NULL CHECK (quantity > 0),
       date TEXT NOT NULL,
       volunteer_id TEXT NOT NULL,
       volunteer_name TEXT NOT NULL,
-      source TEXT NOT NULL,
+      source TEXT NOT NULL CHECK (source IN ('donation', 'purchase', 'partner')),
       notes TEXT NOT NULL DEFAULT '',
       proof_url TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL
@@ -153,6 +154,17 @@ function runMigrations(database: Database.Database): void {
   const hasActive = userColumns.some((col) => col.name === "active");
   if (!hasActive) {
     database.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1;");
+  }
+
+  // Ajout rétro-compatible de la colonne archived sur families pour le soft-delete.
+  const familyColumns = database
+    .prepare("PRAGMA table_info(families)")
+    .all() as { name: string }[];
+  const hasArchived = familyColumns.some((col) => col.name === "archived");
+  if (!hasArchived) {
+    database.exec(
+      "ALTER TABLE families ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;",
+    );
   }
 
   // Ajout rétro-compatible de la colonne file_key pour les installations existantes.

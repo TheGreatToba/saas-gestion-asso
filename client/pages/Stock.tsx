@@ -199,9 +199,9 @@ export default function Stock() {
   };
 
   const openNewArticle = (catId: string) => {
-    setArticleFormCatId(catId);
     setEditingArticle(null);
     resetArticleForm();
+    setArticleFormCatId(catId); // après reset pour que la catégorie cliquée reste présélectionnée
     setShowArticleForm(true);
   };
 
@@ -527,18 +527,10 @@ export default function Stock() {
                       })}
                     </div>
                   ) : (
-                    <div className="px-5 py-4 text-sm text-muted-foreground italic flex items-center justify-between">
-                      <span>
-                        {search || filterStock !== "all"
-                          ? "Aucun article ne correspond aux filtres"
-                          : "Aucun article — ajoutez des variantes pour suivre le stock"}
-                      </span>
-                      {isAdmin && !search && filterStock === "all" && (
-                        <Button variant="ghost" size="sm" className="text-xs text-blue-600 gap-1" onClick={() => openNewArticle(cat.id)}>
-                          <Plus className="w-3 h-3" />
-                          Ajouter un article
-                        </Button>
-                      )}
+                    <div className="px-5 py-4 text-sm text-muted-foreground italic">
+                      {search || filterStock !== "all"
+                        ? "Aucun article ne correspond aux filtres"
+                        : "Aucun article — ajoutez des variantes pour suivre le stock"}
                     </div>
                   )}
                 </div>
@@ -578,7 +570,7 @@ export default function Stock() {
         </Dialog>
 
         {/* Article Create/Edit */}
-        <Dialog open={showArticleForm} onOpenChange={() => { setShowArticleForm(false); setEditingArticle(null); resetArticleForm(); }}>
+        <Dialog open={showArticleForm} onOpenChange={(open) => { if (!open) { setShowArticleForm(false); setEditingArticle(null); resetArticleForm(); } }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>

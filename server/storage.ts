@@ -67,6 +67,7 @@ type FamilyRow = {
   created_at: string;
   updated_at: string;
   last_visit_at: string | null;
+  archived: number;
 };
 function mapFamily(r: FamilyRow): Family {
   return {
@@ -349,12 +350,19 @@ class Storage {
       throw new Error("Email déjà utilisé");
     }
     const id = "usr-" + generateId();
-    this.db
-      .prepare("INSERT INTO users (id, name, email, role, active) VALUES (?, ?, ?, ?, ?)")
-      .run(id, input.name, input.email, input.role, input.active ? 1 : 0);
-    this.db
-      .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
-      .run(id, hashPassword(input.password));
+
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          "INSERT INTO users (id, name, email, role, active) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(id, input.name, input.email, input.role, input.active ? 1 : 0);
+      this.db
+        .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
+        .run(id, hashPassword(input.password));
+    });
+
+    tx();
     return this.getUser(id)!;
   }
 
@@ -588,27 +596,41 @@ class Storage {
 
   getAllFamilies(): Family[] {
     const rows = this.db
-      .prepare("SELECT * FROM families ORDER BY updated_at DESC")
+      .prepare(
+        "SELECT * FROM families WHERE archived = 0 ORDER BY updated_at DESC",
+      )
       .all() as FamilyRow[];
     return rows.map(mapFamily);
   }
 
   getFamily(id: string): Family | null {
-    const r = this.db.prepare("SELECT * FROM families WHERE id = ?").get(id) as
+    const r = this.db
+      .prepare("SELECT * FROM families WHERE id = ? AND archived = 0")
+      .get(id) as
       | FamilyRow
       | undefined;
     return r ? mapFamily(r) : null;
   }
 
   createFamily(input: CreateFamilyInput): Family {
+    // Empêche la création de doublons évidents sur le téléphone
+    const existing = this.db
+      .prepare(
+        "SELECT 1 FROM families WHERE phone = ? AND archived = 0",
+      )
+      .get(input.phone);
+    if (existing) {
+      throw new Error("Une famille avec ce téléphone existe déjà");
+    }
+
     const id = "fam-" + generateId();
     const createdAt = now();
     const updatedAt = now();
     this.db
       .prepare(
         `INSERT INTO families (id, responsible_name, phone, address, neighborhood, member_count, children_count,
-         housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       )
       .run(
         id,
@@ -631,10 +653,24 @@ class Storage {
   }
 
   updateFamily(id: string, input: Partial<CreateFamilyInput>): Family | null {
-    const r = this.db.prepare("SELECT * FROM families WHERE id = ?").get(id) as
+    const r = this.db
+      .prepare("SELECT * FROM families WHERE id = ? AND archived = 0")
+      .get(id) as
       | FamilyRow
       | undefined;
     if (!r) return null;
+
+    // Si le téléphone change, vérifier qu'il n'est pas déjà utilisé
+    if (input.phone && input.phone !== r.phone) {
+      const conflict = this.db
+        .prepare(
+          "SELECT 1 FROM families WHERE phone = ? AND archived = 0 AND id != ?",
+        )
+        .get(input.phone, id);
+      if (conflict) {
+        throw new Error("Une autre famille utilise déjà ce téléphone");
+      }
+    }
     const updatedAt = now();
     this.db
       .prepare(
@@ -665,16 +701,20 @@ class Storage {
   }
 
   deleteFamily(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM families WHERE id = ?").run(id).changes > 0
-    );
+    const updatedAt = now();
+    const info = this.db
+      .prepare(
+        "UPDATE families SET archived = 1, updated_at = ? WHERE id = ? AND archived = 0",
+      )
+      .run(updatedAt, id);
+    return info.changes > 0;
   }
 
   searchFamilies(query: string): Family[] {
     const q = "%" + query.toLowerCase().replace(/%/g, "\\%") + "%";
     const rows = this.db
       .prepare(
-        `SELECT * FROM families WHERE lower(responsible_name) LIKE ? OR lower(neighborhood) LIKE ? OR lower(housing_name) LIKE ? OR lower(address) LIKE ? OR phone LIKE ?`,
+        `SELECT * FROM families WHERE archived = 0 AND (lower(responsible_name) LIKE ? OR lower(neighborhood) LIKE ? OR lower(housing_name) LIKE ? OR lower(address) LIKE ? OR phone LIKE ?)`,
       )
       .all(q, q, q, q, query) as FamilyRow[];
     return rows.map(mapFamily);
@@ -925,6 +965,39 @@ class Storage {
   }
 
   createAid(input: CreateAidStorageInput): Aid {
+    // Protection simple contre les doubles soumissions proches dans le temps
+    const recentDuplicate = this.db
+      .prepare(
+        `SELECT * FROM aids
+         WHERE family_id = ?
+           AND type = ?
+           AND IFNULL(article_id, '') = IFNULL(?, '')
+           AND quantity = ?
+           AND date = ?
+           AND volunteer_id = ?
+           AND source = ?
+           AND notes = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      )
+      .get(
+        input.familyId,
+        input.type,
+        input.articleId ?? "",
+        input.quantity ?? 1,
+        input.date || "",
+        input.volunteerId,
+        input.source,
+        input.notes ?? "",
+      ) as AidRow | undefined;
+
+    if (recentDuplicate) {
+      const createdTime = new Date(recentDuplicate.created_at).getTime();
+      if (Date.now() - createdTime < 10_000) {
+        return mapAid(recentDuplicate);
+      }
+    }
+
     const id = "aid-" + generateId();
     const createdAt = now();
     const date = input.date || now();
@@ -1004,6 +1077,31 @@ class Storage {
   }
 
   createVisitNote(input: CreateVisitNoteStorageInput): VisitNote {
+    // Protection contre les doubles soumissions de notes très rapprochées
+    const recentDuplicate = this.db
+      .prepare(
+        `SELECT * FROM visit_notes
+         WHERE family_id = ?
+           AND volunteer_id = ?
+           AND content = ?
+           AND date = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      )
+      .get(
+        input.familyId,
+        input.volunteerId,
+        input.content,
+        input.date,
+      ) as VisitNoteRow | undefined;
+
+    if (recentDuplicate) {
+      const createdTime = new Date(recentDuplicate.created_at).getTime();
+      if (Date.now() - createdTime < 10_000) {
+        return mapVisitNote(recentDuplicate);
+      }
+    }
+
     const id = "vn-" + generateId();
     const createdAt = now();
     this.db
@@ -1044,7 +1142,9 @@ class Storage {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
     const totalFamilies = (
-      this.db.prepare("SELECT COUNT(*) as c FROM families").get() as {
+      this.db
+        .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0")
+        .get() as {
         c: number;
       }
     ).c;
@@ -1063,14 +1163,14 @@ class Storage {
     const familiesNotVisited = (
       this.db
         .prepare(
-          "SELECT COUNT(*) as c FROM families WHERE last_visit_at IS NULL OR last_visit_at < ?",
+          "SELECT COUNT(*) as c FROM families WHERE archived = 0 AND (last_visit_at IS NULL OR last_visit_at < ?)",
         )
         .get(thirtyDaysAgo.toISOString()) as { c: number }
     ).c;
     const medicalFamilies = (
       this.db
         .prepare(
-          "SELECT COUNT(*) as c FROM families WHERE has_medical_needs = 1",
+          "SELECT COUNT(*) as c FROM families WHERE has_medical_needs = 1 AND archived = 0",
         )
         .get() as { c: number }
     ).c;
@@ -1109,7 +1209,7 @@ class Storage {
 
     const familiesRows = this.db
       .prepare(
-        "SELECT * FROM families ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+        "SELECT * FROM families WHERE archived = 0 ORDER BY updated_at DESC LIMIT ? OFFSET ?",
       )
       .all(limit, offset) as FamilyRow[];
     const families = familiesRows.map(mapFamily);
@@ -1122,7 +1222,7 @@ class Storage {
     }));
 
     const totalFamiliesRow = this.db
-      .prepare("SELECT COUNT(*) as c FROM families")
+      .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0")
       .get() as { c: number };
 
     return {
@@ -1217,6 +1317,32 @@ class Storage {
     uploadedBy: string;
     uploadedByName: string;
   }): FamilyDocument {
+    // Idempotence best-effort : si un document identique vient d'être créé,
+    // on le renvoie au lieu d'insérer un doublon.
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+    const existing = this.db
+      .prepare(
+        `SELECT * FROM family_documents
+         WHERE family_id = ?
+           AND name = ?
+           AND document_type = ?
+           AND uploaded_by = ?
+           AND uploaded_at >= ?
+         ORDER BY uploaded_at DESC
+         LIMIT 1`,
+      )
+      .get(
+        input.familyId,
+        input.name,
+        input.documentType,
+        input.uploadedBy,
+        tenSecondsAgo,
+      ) as FamilyDocumentRow | undefined;
+
+    if (existing) {
+      return mapFamilyDocument(existing);
+    }
+
     const id = "doc-" + generateId();
     const uploadedAt = now();
     this.db

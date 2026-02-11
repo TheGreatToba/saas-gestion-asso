@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import { CreateFamilySchema, type CreateFamilyInput } from "../../shared/schema";
 import { storage } from "../storage";
+import { getDb } from "../db";
 
 type ImportFamilyRow = Partial<CreateFamilyInput> & {
   phone?: string | number | null;
@@ -96,12 +97,14 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
   const duplicateStrategy =
     payload.duplicateStrategy === "update" ? "update" : "skip";
 
-  const existing = storage.getAllFamilies();
-  const existingByPhone = new Map(
-    existing
-      .filter((f) => f.phone)
-      .map((f) => [normalizePhoneForCompare(f.phone), f]),
-  );
+  const db = getDb();
+  const tx = db.transaction(() => {
+    const existing = storage.getAllFamilies();
+    const existingByPhone = new Map(
+      existing
+        .filter((f) => f.phone)
+        .map((f) => [normalizePhoneForCompare(f.phone), f]),
+    );
 
   const result = {
     created: 0,
@@ -112,7 +115,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
 
   const actor = (res as any).locals?.user as { id: string; name: string } | undefined;
 
-  payload.rows.forEach((raw, idx) => {
+    payload.rows.forEach((raw, idx) => {
     const normalized = normalizeRow(raw);
     const phoneKey = normalizePhoneForCompare(normalized.phone);
     const existingFamily = phoneKey ? existingByPhone.get(phoneKey) : undefined;
@@ -187,7 +190,16 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
         details: `Import CSV: ${created.responsibleName}`,
       });
     }
+    });
   });
+
+  try {
+    tx();
+  } catch (err) {
+    console.error("[import/families] Erreur transaction import", err);
+    res.status(500).json({ error: "Erreur lors de l'import, aucune modification appliquée" });
+    return;
+  }
 
   res.json(result);
 };

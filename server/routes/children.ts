@@ -21,7 +21,14 @@ export const handleCreateChild: RequestHandler = (req, res) => {
 };
 
 export const handleUpdateChild: RequestHandler = (req, res) => {
-  const child = storage.updateChild(req.params.id as string, req.body);
+  const parsed = CreateChildSchema.partial().safeParse(req.body);
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "Données invalides", details: parsed.error.flatten() });
+    return;
+  }
+  const child = storage.updateChild(req.params.id as string, parsed.data);
   if (!child) {
     res.status(404).json({ error: "Enfant non trouvé" });
     return;

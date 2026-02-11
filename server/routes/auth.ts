@@ -52,7 +52,8 @@ export const handleRegister: RequestHandler = (req, res) => {
       name: parsed.data.name,
       email: parsed.data.email,
       password: parsed.data.password,
-      role: "admin",
+      // Inscription publique : toujours volunteer, compte à activer manuellement par un admin
+      role: "volunteer",
       active: true,
     });
     const token = createAuthToken(user.id);
