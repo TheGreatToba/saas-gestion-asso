@@ -19,34 +19,108 @@ import type {
 } from "@shared/schema";
 import { getSessionToken, clearSession } from "@/lib/session";
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+type FetchJsonOptions = RequestInit & {
+  /**
+   * Délai maximum avant d'abandonner la requête (ms).
+   * Par défaut 15s.
+   */
+  timeoutMs?: number;
+  /**
+   * Nombre de tentatives supplémentaires en cas d'erreur réseau / timeout.
+   * Par défaut 0 (pas de retry implicite).
+   */
+  retry?: number;
+  /**
+   * Délai de base entre les tentatives (ms), avec petit backoff linéaire.
+   * Par défaut 500ms.
+   */
+  retryDelayMs?: number;
+};
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJson<T>(
+  url: string,
+  options: FetchJsonOptions = {},
+): Promise<T> {
+  const {
+    timeoutMs = 15_000,
+    retry = 0,
+    retryDelayMs = 500,
+    ...requestInit
+  } = options;
+
   const token = getSessionToken();
 
-  const res = await fetch(url, {
-    ...options,
-    credentials: "include", // envoie le cookie auth_token (auth principale)
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-  });
+  let attempt = 0;
+  // On limite volontairement les retries implicites aux méthodes considérées comme sûres.
+  const method = (requestInit.method || "GET").toUpperCase();
+  const maxRetriesForThisRequest =
+    method === "GET" || method === "HEAD" ? retry : 0;
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Erreur serveur" }));
+  // Boucle de retry contrôlé
+  // - Timeout explicite via AbortController
+  // - Retry seulement en cas d'erreur réseau / timeout
+  for (;;) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (res.status === 401 || error.error === "Compte désactivé") {
-      clearSession();
+    try {
+      const res = await fetch(url, {
+        ...requestInit,
+        credentials: "include", // envoie le cookie auth_token (auth principale)
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...requestInit.headers,
+        },
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const error = await res
+          .json()
+          .catch(() => ({ error: "Erreur serveur" }));
+
+        if (res.status === 401 || error.error === "Compte désactivé") {
+          clearSession();
+        }
+        if (res.status === 404) {
+          throw new Error(
+            error.error ||
+              "Service non trouvé. Lancez l’application avec « pnpm dev » (client + API sur le même serveur).",
+          );
+        }
+        throw new Error(error.error || `Erreur ${res.status}`);
+      }
+
+      return res.json();
+    } catch (err) {
+      const e = err as any;
+      const isAbortError = e?.name === "AbortError";
+      // Dans les navigateurs, les erreurs réseau sont typées TypeError
+      const isNetworkError = e instanceof TypeError || isAbortError;
+
+      if (!isNetworkError || attempt >= maxRetriesForThisRequest) {
+        // Message plus explicite en cas de problème réseau/timeout
+        if (isNetworkError) {
+          throw new Error(
+            "Erreur réseau. Vérifiez votre connexion (Wi‑Fi/4G) et réessayez.",
+          );
+        }
+        throw err;
+      }
+
+      attempt += 1;
+      // Petit backoff linéaire : retryDelayMs, 2x, 3x...
+      await sleep(retryDelayMs * attempt);
+      continue;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    if (res.status === 404) {
-      throw new Error(
-        error.error ||
-          "Service non trouvé. Lancez l’application avec « pnpm dev » (client + API sur le même serveur)."
-      );
-    }
-    throw new Error(error.error || `Erreur ${res.status}`);
   }
-  return res.json();
 }
 
 // ==================== Dashboard ====================

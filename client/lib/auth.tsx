@@ -66,7 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) {
         const data = await res.json();
-        return { success: false, error: data.error || "Erreur de connexion" };
+        return {
+          success: false,
+          error:
+            data.error ||
+            "Erreur de connexion. Vérifiez vos identifiants ou réessayez dans quelques instants.",
+        };
       }
 
       const data = (await res.json()) as LoginResponse;
@@ -80,7 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { success: true };
     } catch {
-      return { success: false, error: "Erreur réseau" };
+      return {
+        success: false,
+        error:
+          "Erreur réseau lors de la connexion. Vérifiez votre connexion (Wi‑Fi/4G) et réessayez.",
+      };
     }
   };
 
@@ -101,7 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         return {
           success: false,
-          error: responseData.error || "Erreur lors de l'inscription",
+          error:
+            responseData.error ||
+            "Erreur lors de l'inscription. Vérifiez les informations saisies ou réessayez plus tard.",
         };
       }
 
@@ -110,7 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       return { success: true };
     } catch {
-      return { success: false, error: "Erreur réseau" };
+      return {
+        success: false,
+        error:
+          "Erreur réseau lors de l'inscription. Vérifiez votre connexion (Wi‑Fi/4G) et réessayez.",
+      };
     }
   };
 
