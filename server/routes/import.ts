@@ -111,6 +111,8 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     updated: 0,
     skipped: 0,
     errors: [] as { row: number; message: string }[],
+    createdFamilies: [] as { row: number; familyNumber: number; id: string }[],
+    updatedFamilies: [] as { row: number; familyNumber: number; id: string }[],
   };
 
   const actor = (res as any).locals?.user as { id: string; name: string } | undefined;
@@ -138,6 +140,11 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       const updated = storage.updateFamily(existingFamily.id, parsed.data);
       if (updated) {
         result.updated += 1;
+        result.updatedFamilies.push({
+          row: idx + 1,
+          familyNumber: updated.number,
+          id: updated.id,
+        });
         if (actor) {
           storage.appendAuditLog({
             userId: actor.id,
@@ -203,6 +210,11 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
 
     const created = storage.createFamily(parsed.data);
     result.created += 1;
+    result.createdFamilies.push({
+      row: idx + 1,
+      familyNumber: created.number,
+      id: created.id,
+    });
     if (phoneKey) {
       existingByPhone.set(phoneKey, created);
     }

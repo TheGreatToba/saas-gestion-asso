@@ -23,4 +23,6 @@ export interface ImportFamiliesResult {
   updated: number;
   skipped: number;
   errors: { row: number; message: string }[];
+  createdFamilies: { row: number; familyNumber: number; id: string }[];
+  updatedFamilies: { row: number; familyNumber: number; id: string }[];
 }

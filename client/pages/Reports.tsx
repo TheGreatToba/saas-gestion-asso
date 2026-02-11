@@ -820,12 +820,40 @@ export default function Reports() {
                       {importing ? "Import en cours..." : `Importer ${mappedRows.length} ligne(s)`}
                     </Button>
                     {importResult && (
-                      <div className="text-sm text-muted-foreground">
-                        {importResult.created} créées, {importResult.updated} mises à jour, {importResult.skipped} ignorées
-                        {importResult.errors.length > 0 && (
-                          <span className="text-red-600 ml-2">
-                            {importResult.errors.length} erreur(s)
-                          </span>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <div>
+                          {importResult.created} créées, {importResult.updated} mises à jour, {importResult.skipped} ignorées
+                          {importResult.errors.length > 0 && (
+                            <span className="text-red-600 ml-2">
+                              {importResult.errors.length} erreur(s)
+                            </span>
+                          )}
+                        </div>
+                        {(importResult.createdFamilies.length > 0 || importResult.updatedFamilies.length > 0) && (
+                          <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                            {importResult.createdFamilies.length > 0 && (
+                              <div>
+                                <strong>Familles créées :</strong>{" "}
+                                {importResult.createdFamilies.map((f, idx) => (
+                                  <span key={f.id}>
+                                    Ligne {f.row} → N° {f.familyNumber}
+                                    {idx < importResult.createdFamilies.length - 1 ? ", " : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {importResult.updatedFamilies.length > 0 && (
+                              <div>
+                                <strong>Familles mises à jour :</strong>{" "}
+                                {importResult.updatedFamilies.map((f, idx) => (
+                                  <span key={f.id}>
+                                    Ligne {f.row} → N° {f.familyNumber}
+                                    {idx < importResult.updatedFamilies.length - 1 ? ", " : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
