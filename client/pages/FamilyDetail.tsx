@@ -179,6 +179,21 @@ export default function FamilyDetail() {
     },
   });
 
+  const deleteAidMutation = useMutation({
+    mutationFn: api.deleteAid,
+    onSuccess: () => {
+      invalidateAll();
+      toast({ title: "Aide supprimée" });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Erreur",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const addNoteMutation = useMutation({
     mutationFn: (data: { content: string; date: string }) =>
       api.createNote(id!, data),
@@ -637,11 +652,32 @@ export default function FamilyDetail() {
                             {getCategoryLabel(aid.type)} (x{aid.quantity})
                           </p>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(aid.date), "d MMM yyyy", {
-                            locale: fr,
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(aid.date), "d MMM yyyy", {
+                              locale: fr,
+                            })}
+                          </span>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    "Supprimer cette aide ? Cette action est irréversible.",
+                                  )
+                                ) {
+                                  deleteAidMutation.mutate(aid.id);
+                                }
+                              }}
+                              aria-label="Supprimer l'aide"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {aid.volunteerName} — {AID_SOURCE_LABELS[aid.source]}

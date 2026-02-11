@@ -261,6 +261,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  deleteAid: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/aids/${id}`, {
+      method: "DELETE",
+    }),
+
   // Notes
   getNotes: (familyId: string) =>
     fetchJson<VisitNote[]>(`/api/families/${familyId}/notes`),

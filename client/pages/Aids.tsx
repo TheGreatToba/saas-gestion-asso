@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   Package,
   X,
+  Trash2,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -151,6 +152,22 @@ export default function Aids() {
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteAid,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aids-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      toast({ title: "Aide supprimée" });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Erreur",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -739,9 +756,30 @@ export default function Aids() {
                         )
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
-                      <Calendar className="w-4 h-4" />
-                      {format(new Date(aid.date), "d MMM yyyy", { locale: fr })}
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        {format(new Date(aid.date), "d MMM yyyy", { locale: fr })}
+                      </div>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Supprimer cette aide ? Cette action est irréversible.",
+                              )
+                            ) {
+                              deleteMutation.mutate(aid.id);
+                            }
+                          }}
+                          aria-label="Supprimer l'aide"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
