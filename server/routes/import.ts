@@ -152,14 +152,48 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       return;
     }
 
+    // Validation des champs requis avant création
+    if (!normalized.responsibleName || normalized.responsibleName.trim() === "") {
+      result.errors.push({
+        row: idx + 1,
+        message: "Nom du responsable requis",
+      });
+      return;
+    }
+
+    if (!normalized.phone || normalized.phone.trim() === "") {
+      result.errors.push({
+        row: idx + 1,
+        message: "Téléphone requis",
+      });
+      return;
+    }
+
+    if (!normalized.housing) {
+      result.errors.push({
+        row: idx + 1,
+        message: "Statut d'hébergement requis (housed, pending_placement, ou not_housed)",
+      });
+      return;
+    }
+
+    if (!normalized.memberCount || normalized.memberCount < 1) {
+      result.errors.push({
+        row: idx + 1,
+        message: "Nombre de membres requis (minimum 1)",
+      });
+      return;
+    }
+
+    // Préparation des données selon le schéma actuel (address et neighborhood sont optionnels)
     const prepared: CreateFamilyInput = {
-      responsibleName: normalized.responsibleName ?? "",
-      phone: normalized.phone ?? "",
+      responsibleName: normalized.responsibleName,
+      phone: normalized.phone,
       address: normalized.address ?? "",
       neighborhood: normalized.neighborhood ?? "",
-      memberCount: normalized.memberCount ?? 1,
+      memberCount: normalized.memberCount,
       childrenCount: normalized.childrenCount ?? 0,
-      housing: normalized.housing ?? "not_housed",
+      housing: normalized.housing,
       housingName: normalized.housingName ?? "",
       healthNotes: normalized.healthNotes ?? "",
       hasMedicalNeeds: normalized.hasMedicalNeeds ?? false,
@@ -170,7 +204,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     if (!parsed.success) {
       result.errors.push({
         row: idx + 1,
-        message: "Données invalides ou incomplètes",
+        message: `Données invalides: ${parsed.error.errors.map((e) => e.message).join(", ")}`,
       });
       return;
     }
