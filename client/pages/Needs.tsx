@@ -67,8 +67,8 @@ export default function Needs() {
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
 
-  // Extract unique neighborhoods for filter
-  const neighborhoods = [...new Set(families.map((f) => f.neighborhood))].sort();
+  // Extract unique neighborhoods for filter (exclude empty: Radix Select forbids value="")
+  const neighborhoods = [...new Set(families.map((f) => f.neighborhood).filter((n) => n != null && n !== ""))].sort();
 
   const createMutation = useMutation({
     mutationFn: api.createNeed,
@@ -218,11 +218,13 @@ export default function Needs() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tout type</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
+                    {categories
+                      .filter((cat) => cat.id != null && cat.id !== "")
+                      .map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -357,7 +359,7 @@ export default function Needs() {
                         </Button>
                       </Link>
                       <Select
-                        value={need.status}
+                        value={need.status || "pending"}
                         onValueChange={(v) =>
                           updateMutation.mutate({ id: need.id, status: v })
                         }

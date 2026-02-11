@@ -375,9 +375,11 @@ export default function Stock() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les catégories</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
+                  {categories
+                    .filter((cat) => cat.id != null && cat.id !== "")
+                    .map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <Select value={filterStock} onValueChange={(v) => setFilterStock(v as StockFilter)}>
@@ -584,9 +586,11 @@ export default function Stock() {
                   <Select value={articleFormCatId} onValueChange={setArticleFormCatId}>
                     <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                      ))}
+                      {categories
+                        .filter((cat) => cat.id != null && cat.id !== "")
+                        .map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -501,11 +501,13 @@ export default function Aids() {
                                   <SelectValue placeholder="Choisir une catégorie" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {categories.map((cat) => (
-                                    <SelectItem key={cat.id} value={cat.id}>
-                                      {cat.name}
-                                    </SelectItem>
-                                  ))}
+                                  {categories
+                                    .filter((cat) => cat.id != null && cat.id !== "")
+                                    .map((cat) => (
+                                      <SelectItem key={cat.id} value={cat.id}>
+                                        {cat.name}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -537,11 +539,13 @@ export default function Aids() {
                                       Aucun article disponible
                                     </SelectItem>
                                   )}
-                                  {articles.map((art) => (
-                                    <SelectItem key={art.id} value={art.id}>
-                                      {art.name} — {art.stockQuantity} {art.unit}
-                                    </SelectItem>
-                                  ))}
+                                  {articles
+                                    .filter((art) => art.id != null && art.id !== "")
+                                    .map((art) => (
+                                      <SelectItem key={art.id} value={art.id}>
+                                        {art.name} — {art.stockQuantity} {art.unit}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -683,9 +687,11 @@ export default function Aids() {
                   <SelectTrigger className="w-44"><SelectValue placeholder="Type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tout type</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                    ))}
+                    {categories
+                      .filter((cat) => cat.id != null && cat.id !== "")
+                      .map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -661,11 +661,13 @@ export default function Reports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__none">Ignorer</SelectItem>
-                                  {csvHeaders.map((header) => (
-                                    <SelectItem key={header} value={header}>
-                                      {header}
-                                    </SelectItem>
-                                  ))}
+                                  {csvHeaders
+                                    .filter((h) => h != null && String(h).trim() !== "")
+                                    .map((header) => (
+                                      <SelectItem key={header} value={header}>
+                                        {header}
+                                      </SelectItem>
+                                    ))}
                                   <SelectItem value="__fixed">Valeur fixe</SelectItem>
                                 </SelectContent>
                               </Select>
