@@ -774,6 +774,19 @@ class Storage {
     return info.changes > 0;
   }
 
+  /**
+   * Supprime définitivement toutes les familles archivées (hard delete).
+   * Les enregistrements liés (enfants, besoins, aides, notes, documents...)
+   * sont supprimés automatiquement grâce aux contraintes ON DELETE CASCADE.
+   * Retourne le nombre de familles supprimées.
+   */
+  purgeArchivedFamilies(): number {
+    const info = this.db
+      .prepare("DELETE FROM families WHERE archived = 1")
+      .run();
+    return info.changes ?? 0;
+  }
+
   searchFamilies(query: string): Family[] {
     const q = "%" + query.toLowerCase().replace(/%/g, "\\%") + "%";
     const rows = this.db

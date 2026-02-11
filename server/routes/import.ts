@@ -1,7 +1,6 @@
 import { RequestHandler } from "express";
 import { CreateFamilySchema, type CreateFamilyInput } from "../../shared/schema";
 import { storage } from "../storage";
-import { getDb } from "../db";
 
 type ImportFamilyRow = Partial<CreateFamilyInput> & {
   phone?: string | number | null;
@@ -97,14 +96,15 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
   const duplicateStrategy =
     payload.duplicateStrategy === "update" ? "update" : "skip";
 
-  const db = getDb();
-  const tx = db.transaction(() => {
-    const existing = storage.getAllFamilies();
-    const existingByPhone = new Map(
-      existing
-        .filter((f) => f.phone)
-        .map((f) => [normalizePhoneForCompare(f.phone), f]),
-    );
+  // On travaille en mode "meilleur effort" sans transaction globale :
+  // chaque ligne est traitée individuellement, les erreurs sont collectées
+  // mais n'annulent pas les autres lignes.
+  const existing = storage.getAllFamilies();
+  const existingByPhone = new Map(
+    existing
+      .filter((f) => f.phone)
+      .map((f) => [normalizePhoneForCompare(f.phone), f]),
+  );
 
   const result = {
     created: 0,
@@ -115,9 +115,10 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     updatedFamilies: [] as { row: number; familyNumber: number; id: string }[],
   };
 
-  const actor = (res as any).locals?.user as { id: string; name: string } | undefined;
+  const actor = (res as any).locals
+    ?.user as { id: string; name: string } | undefined;
 
-    payload.rows.forEach((raw, idx) => {
+  payload.rows.forEach((raw, idx) => {
     const normalized = normalizeRow(raw);
     const phoneKey = normalizePhoneForCompare(normalized.phone);
     const existingFamily = phoneKey ? existingByPhone.get(phoneKey) : undefined;
@@ -137,7 +138,18 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
         return;
       }
 
-      const updated = storage.updateFamily(existingFamily.id, parsed.data);
+      let updated = null;
+      try {
+        updated = storage.updateFamily(existingFamily.id, parsed.data);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        result.errors.push({
+          row: idx + 1,
+          message: `Erreur lors de la mise à jour: ${errorMessage}`,
+        });
+        return;
+      }
+
       if (updated) {
         result.updated += 1;
         result.updatedFamilies.push({
@@ -192,7 +204,11 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     }
 
     let created:
-      | (CreateFamilyInput & { id: string; number: number; responsibleName: string })
+      | (CreateFamilyInput & {
+          id: string;
+          number: number;
+          responsibleName: string;
+        })
       | null = null;
     try {
       const fam = storage.createFamily(parsed.data);
@@ -225,22 +241,8 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
         details: `Import CSV: ${created.responsibleName}`,
       });
     }
-    });
   });
 
-  try {
-    tx();
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorStack = err instanceof Error ? err.stack : undefined;
-    console.error("[import/families] Erreur transaction import", err);
-    console.error("[import/families] Stack:", errorStack);
-    res.status(500).json({ 
-      error: "Erreur lors de l'import, aucune modification appliquée",
-      details: errorMessage 
-    });
-    return;
-  }
-
+  // Même si certaines lignes ont échoué, on renvoie toujours un résumé détaillé
   res.json(result);
 };

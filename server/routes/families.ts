@@ -85,3 +85,9 @@ export const handleDeleteFamily: RequestHandler = (req, res) => {
   }
   res.json({ success: true });
 };
+
+/** Hard delete de toutes les familles archivées (admin seulement). */
+export const handlePurgeArchivedFamilies: RequestHandler = (_req, res) => {
+  const purged = storage.purgeArchivedFamilies();
+  res.json({ purged });
+};
