@@ -312,10 +312,10 @@ export default function FamilyDetail() {
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-                  <span>{family.responsibleName}</span>
-                  {family.number > 0 && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                      N° {family.number}
+                  <span>{family.number > 0 ? `Famille N° ${family.number}` : "Famille"}</span>
+                  {family.responsibleName && (
+                    <span className="text-base font-normal text-muted-foreground">
+                      — {family.responsibleName}
                     </span>
                   )}
                 </h1>

@@ -328,7 +328,7 @@ export default function Needs() {
                           to={`/families/${family.id}`}
                           className="text-sm text-primary hover:underline"
                         >
-                          {family.responsibleName} — {family.neighborhood}
+                          {family.number > 0 ? `Famille N° ${family.number}` : "Famille"}{family.responsibleName ? ` — ${family.responsibleName}` : ""} — {family.neighborhood}
                         </Link>
                       )}
                       {need.details && (
@@ -426,7 +426,7 @@ export default function Needs() {
                   <option value="">Sélectionner une famille</option>
                   {families.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.responsibleName} — {f.neighborhood}
+                      {f.number > 0 ? `Famille N° ${f.number}` : "Famille"}{f.responsibleName ? ` — ${f.responsibleName}` : ""} — {f.neighborhood}
                     </option>
                   ))}
                 </select>

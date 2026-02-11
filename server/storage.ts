@@ -1207,7 +1207,10 @@ class Storage {
       .all() as AidRow[];
     const recentAids = recentAidsRows.map((a) => {
       const fam = this.getFamily(a.family_id);
-      return { ...mapAid(a), familyName: fam?.responsibleName ?? "Inconnu" };
+      return { 
+        ...mapAid(a), 
+        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu" 
+      };
     });
     const urgentNeedsRows = this.db
       .prepare(
@@ -1216,7 +1219,10 @@ class Storage {
       .all() as NeedRow[];
     const urgentNeedsList = urgentNeedsRows.map((n) => {
       const fam = this.getFamily(n.family_id);
-      return { ...mapNeed(n), familyName: fam?.responsibleName ?? "Inconnu" };
+      return { 
+        ...mapNeed(n), 
+        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu" 
+      };
     });
     return {
       totalFamilies,

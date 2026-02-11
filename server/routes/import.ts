@@ -153,14 +153,6 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     }
 
     // Validation des champs requis avant création
-    if (!normalized.responsibleName || normalized.responsibleName.trim() === "") {
-      result.errors.push({
-        row: idx + 1,
-        message: "Nom du responsable requis",
-      });
-      return;
-    }
-
     if (!normalized.phone || normalized.phone.trim() === "") {
       result.errors.push({
         row: idx + 1,
@@ -185,9 +177,9 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       return;
     }
 
-    // Préparation des données selon le schéma actuel (address et neighborhood sont optionnels)
+    // Préparation des données selon le schéma actuel (responsibleName, address et neighborhood sont optionnels)
     const prepared: CreateFamilyInput = {
-      responsibleName: normalized.responsibleName,
+      responsibleName: normalized.responsibleName ?? "",
       phone: normalized.phone,
       address: normalized.address ?? "",
       neighborhood: normalized.neighborhood ?? "",

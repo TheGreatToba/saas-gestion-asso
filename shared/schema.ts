@@ -98,7 +98,7 @@ export const FamilySchema = z.object({
   id: z.string(),
   // Numéro séquentiel lisible (1, 2, 3, ...) attribué à l'enregistrement
   number: z.number().int(),
-  responsibleName: z.string().min(1, "Nom requis"),
+  responsibleName: z.string(),
   phone: z.string(),
   address: z.string(),
   neighborhood: z.string(),
@@ -116,7 +116,7 @@ export const FamilySchema = z.object({
 export type Family = z.infer<typeof FamilySchema>;
 
 export const CreateFamilySchema = z.object({
-  responsibleName: z.string().min(1, "Nom requis"),
+  responsibleName: z.string().optional().default(""),
   phone: z.string().min(1, "Téléphone requis"),
   // Adresse et quartier deviennent optionnels : certaines familles n'ont pas d'adresse précise
   address: z.string().optional().default(""),

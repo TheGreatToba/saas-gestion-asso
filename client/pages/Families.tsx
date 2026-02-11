@@ -249,17 +249,17 @@ export default function Families() {
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      {family.number > 0 && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                          N° {family.number}
-                        </span>
-                      )}
                       <Link
                         to={`/families/${family.id}`}
-                        className="text-lg font-semibold text-foreground hover:text-primary transition truncate"
+                        className="text-lg font-bold text-foreground hover:text-primary transition truncate"
                       >
-                        {family.responsibleName}
+                        {family.number > 0 ? `Famille N° ${family.number}` : "Famille"}
                       </Link>
+                      {family.responsibleName && (
+                        <span className="text-sm text-muted-foreground font-normal">
+                          {family.responsibleName}
+                        </span>
+                      )}
                       <span className="text-muted-foreground font-normal text-base">
                         {(family.housing === "housed" || family.housing === "pending_placement") && family.housingName
                           ? family.housingName
@@ -362,14 +362,13 @@ export default function Families() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label>Nom du responsable *</Label>
+                <Label>Nom du responsable</Label>
                 <Input
                   value={form.responsibleName}
                   onChange={(e) =>
                     setForm({ ...form, responsibleName: e.target.value })
                   }
                   placeholder="Nom complet"
-                  required
                   autoComplete="name"
                 />
               </div>

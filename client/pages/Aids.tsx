@@ -347,7 +347,7 @@ export default function Aids() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
                   <Input
                     placeholder="Tapez le nom ou quartier..."
-                    value={selectedFamily ? `${selectedFamily.responsibleName} — ${selectedFamily.neighborhood}` : familySearch}
+                    value={selectedFamily ? `${selectedFamily.number > 0 ? `Famille N° ${selectedFamily.number}` : "Famille"}${selectedFamily.responsibleName ? ` — ${selectedFamily.responsibleName}` : ""} — ${selectedFamily.neighborhood}` : familySearch}
                     onChange={(e) => { setFamilySearch(e.target.value); setSelectedFamilyId(""); setShowFamilyDropdown(true); }}
                     onFocus={() => { if (!selectedFamilyId) setShowFamilyDropdown(true); }}
                     className="pl-10 h-12 text-base"
@@ -377,7 +377,7 @@ export default function Aids() {
                           <button key={f.id} type="button" className="w-full text-left px-4 py-3 hover:bg-green-50 transition flex justify-between items-center border-b last:border-b-0"
                             onClick={() => { setSelectedFamilyId(f.id); setFamilySearch(""); setShowFamilyDropdown(false); }}>
                             <div>
-                              <p className="font-medium">{f.responsibleName}</p>
+                              <p className="font-medium">{f.number > 0 ? `Famille N° ${f.number}` : "Famille"}{f.responsibleName ? ` — ${f.responsibleName}` : ""}</p>
                               <p className="text-sm text-muted-foreground">{f.neighborhood} — {f.memberCount} membres, {f.childrenCount} enfant{f.childrenCount !== 1 ? "s" : ""}</p>
                             </div>
                             <Badge variant="outline" className={`shrink-0 ml-2 ${
@@ -732,7 +732,7 @@ export default function Aids() {
                       </div>
                       {family && (
                         <Link to={`/families/${family.id}`} className="text-sm text-primary hover:underline">
-                          {family.responsibleName} — {family.neighborhood}
+                          {family.number > 0 ? `Famille N° ${family.number}` : "Famille"}{family.responsibleName ? ` — ${family.responsibleName}` : ""} — {family.neighborhood}
                         </Link>
                       )}
                       <p className="text-sm text-muted-foreground mt-1">Par {aid.volunteerName}</p>
