@@ -10,7 +10,7 @@ import {
   handleLogout,
   handleMe,
 } from "./routes/auth";
-import { handleCreateUser, handleUpdateUser } from "./routes/users";
+import { handleCreateUser, handleUpdateUser, handleDeleteUser } from "./routes/users";
 import {
   handleGetFamilies,
   handleGetFamily,
@@ -286,6 +286,12 @@ export function createServer() {
     requireAuth,
     requireAdmin,
     asyncHandler(handleUpdateUser),
+  );
+  app.delete(
+    "/api/users/:id",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handleDeleteUser),
   );
   app.get(
     "/api/export",

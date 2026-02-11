@@ -294,6 +294,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  deleteUser: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/users/${id}`, {
+      method: "DELETE",
+    }),
+
   // Export (paginated)
   getExportData: (params?: { limit?: number; offset?: number }) => {
     const searchParams = new URLSearchParams();

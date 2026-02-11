@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UserPlus, Shield, User, Search, Pencil, Power } from "lucide-react";
+import { UserPlus, Shield, User, Search, Pencil, Power, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -90,6 +90,17 @@ export default function Users() {
       setForm(emptyForm);
       setPassword("");
       toast({ title: "Compte mis à jour" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast({ title: "Compte supprimé" });
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
@@ -246,6 +257,27 @@ export default function Users() {
                       <Power className="w-4 h-4" />
                       {u.active ? "Désactiver" : "Activer"}
                     </Button>
+                    {u.role === "volunteer" && currentUser?.id !== u.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Supprimer définitivement le compte de ${u.name} ? Cette action est irréversible.`
+                            )
+                          ) {
+                            deleteMutation.mutate(u.id);
+                          }
+                        }}
+                        disabled={deleteMutation.isPending}
+                        title="Supprimer le compte bénévole"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Supprimer
+                      </Button>
+                    )}
                     <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                       {u.role === "admin" ? (
                         <Shield className="w-3.5 h-3.5 text-amber-600" />

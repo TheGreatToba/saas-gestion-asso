@@ -399,6 +399,20 @@ class Storage {
     return this.getUser(id);
   }
 
+  deleteUser(id: string): boolean {
+    const user = this.getUser(id);
+    if (!user) return false;
+    
+    // Supprimer l'utilisateur et son mot de passe en transaction
+    const tx = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM passwords WHERE user_id = ?").run(id);
+      this.db.prepare("DELETE FROM users WHERE id = ?").run(id);
+    });
+    
+    tx();
+    return true;
+  }
+
   // ==================== CATEGORIES ====================
 
   getAllCategories(): Category[] {

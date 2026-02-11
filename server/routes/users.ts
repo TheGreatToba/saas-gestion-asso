@@ -93,3 +93,47 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
     res.status(400).json({ error: message });
   }
 };
+
+export const handleDeleteUser: RequestHandler = (req, res) => {
+  const actor = (res as any).locals?.user as
+    | { id: string; name: string }
+    | undefined;
+  const targetId = req.params.id as string;
+  const target = storage.getUser(targetId);
+  
+  if (!target) {
+    res.status(404).json({ error: "Utilisateur introuvable" });
+    return;
+  }
+
+  // Empêcher la suppression de son propre compte
+  if (actor?.id === targetId) {
+    res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
+    return;
+  }
+
+  // Empêcher la suppression des administrateurs (seulement les bénévoles peuvent être supprimés)
+  if (target.role === "admin") {
+    res.status(403).json({ error: "Impossible de supprimer un compte administrateur" });
+    return;
+  }
+
+  const success = storage.deleteUser(targetId);
+  if (!success) {
+    res.status(404).json({ error: "Utilisateur introuvable" });
+    return;
+  }
+
+  if (actor) {
+    storage.appendAuditLog({
+      userId: actor.id,
+      userName: actor.name,
+      action: "deleted",
+      entityType: "user",
+      entityId: targetId,
+      details: target.email,
+    });
+  }
+
+  res.json({ success: true });
+};
