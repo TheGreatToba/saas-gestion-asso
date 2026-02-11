@@ -74,13 +74,13 @@ const FIELD_DEFS: {
   placeholder?: string;
   defaultValue?: string;
 }[] = [
-  { key: "responsibleName", label: "Nom du responsable", required: true, type: "string" },
-  { key: "phone", label: "Téléphone", required: true, type: "string" },
-  { key: "address", label: "Adresse", required: true, type: "string" },
-  { key: "neighborhood", label: "Quartier", required: true, type: "string" },
-  { key: "memberCount", label: "Membres", required: true, type: "number", defaultValue: "1" },
-  { key: "childrenCount", label: "Enfants", required: true, type: "number", defaultValue: "0" },
-  { key: "housing", label: "Hébergement", required: true, type: "housing", defaultValue: "not_housed" },
+  { key: "responsibleName", label: "Nom du responsable", required: false, type: "string" },
+  { key: "phone", label: "Téléphone", required: false, type: "string" },
+  { key: "address", label: "Adresse", required: false, type: "string" },
+  { key: "neighborhood", label: "Quartier", required: false, type: "string" },
+  { key: "memberCount", label: "Membres", required: false, type: "number", defaultValue: "0" },
+  { key: "childrenCount", label: "Enfants", required: false, type: "number", defaultValue: "0" },
+  { key: "housing", label: "Hébergement", required: false, type: "housing", defaultValue: "not_housed" },
   { key: "housingName", label: "Nom du foyer", required: false, type: "string" },
   { key: "healthNotes", label: "Maladies et spécificités", required: false, type: "string" },
   { key: "hasMedicalNeeds", label: "Cas médical (oui/non)", required: false, type: "boolean", defaultValue: "non" },
@@ -717,13 +717,6 @@ export default function Reports() {
                     </div>
                   </div>
 
-                  {missingRequiredFields.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                      Champs obligatoires non mappés :{" "}
-                      {missingRequiredFields.map((field) => field.label).join(", ")}.
-                      Ajoutez un mapping ou une valeur fixe avant d'importer.
-                    </div>
-                  )}
 
                   <div className="bg-white border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center gap-3 mb-3">
@@ -814,7 +807,7 @@ export default function Reports() {
                           setImporting(false);
                         }
                       }}
-                      disabled={mappedRows.length === 0 || importing || missingRequiredFields.length > 0}
+                      disabled={mappedRows.length === 0 || importing}
                       className="gap-2"
                     >
                       {importing ? "Import en cours..." : `Importer ${mappedRows.length} ligne(s)`}
