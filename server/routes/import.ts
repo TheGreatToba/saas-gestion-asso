@@ -184,18 +184,24 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     if (!parsed.success) {
       result.errors.push({
         row: idx + 1,
-        message: `Données invalides: ${parsed.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
+        message: `Données invalides: ${parsed.error.errors
+          .map((e) => `${e.path.join(".")}: ${e.message}`)
+          .join(", ")}`,
       });
       return;
     }
 
+    let created:
+      | (CreateFamilyInput & { id: string; number: number; responsibleName: string })
+      | null = null;
     try {
-      const created = storage.createFamily(parsed.data);
+      const fam = storage.createFamily(parsed.data);
+      created = fam as any;
       result.created += 1;
       result.createdFamilies.push({
         row: idx + 1,
-        familyNumber: created.number,
-        id: created.id,
+        familyNumber: fam.number,
+        id: fam.id,
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -205,10 +211,11 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       });
       return;
     }
-    if (phoneKey) {
+
+    if (created && phoneKey) {
       existingByPhone.set(phoneKey, created);
     }
-    if (actor) {
+    if (created && actor) {
       storage.appendAuditLog({
         userId: actor.id,
         userName: actor.name,
