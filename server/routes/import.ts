@@ -160,6 +160,12 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     }
 
     // Tous les champs sont optionnels - utilisation de valeurs par défaut
+    // S'assurer que housing est toujours une valeur valide de l'enum
+    const housingValue: CreateFamilyInput["housing"] = 
+      normalized.housing && ["housed", "pending_placement", "not_housed"].includes(normalized.housing)
+        ? normalized.housing
+        : "not_housed";
+
     const prepared: CreateFamilyInput = {
       responsibleName: normalized.responsibleName ?? "",
       phone: normalized.phone ?? "",
@@ -167,7 +173,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       neighborhood: normalized.neighborhood ?? "",
       memberCount: normalized.memberCount ?? 0,
       childrenCount: normalized.childrenCount ?? 0,
-      housing: normalized.housing ?? "not_housed",
+      housing: housingValue,
       housingName: normalized.housingName ?? "",
       healthNotes: normalized.healthNotes ?? "",
       hasMedicalNeeds: normalized.hasMedicalNeeds ?? false,
@@ -178,18 +184,27 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     if (!parsed.success) {
       result.errors.push({
         row: idx + 1,
-        message: `Données invalides: ${parsed.error.errors.map((e) => e.message).join(", ")}`,
+        message: `Données invalides: ${parsed.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
       });
       return;
     }
 
-    const created = storage.createFamily(parsed.data);
-    result.created += 1;
-    result.createdFamilies.push({
-      row: idx + 1,
-      familyNumber: created.number,
-      id: created.id,
-    });
+    try {
+      const created = storage.createFamily(parsed.data);
+      result.created += 1;
+      result.createdFamilies.push({
+        row: idx + 1,
+        familyNumber: created.number,
+        id: created.id,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      result.errors.push({
+        row: idx + 1,
+        message: `Erreur lors de la création: ${errorMessage}`,
+      });
+      return;
+    }
     if (phoneKey) {
       existingByPhone.set(phoneKey, created);
     }
@@ -209,8 +224,14 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
   try {
     tx();
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
     console.error("[import/families] Erreur transaction import", err);
-    res.status(500).json({ error: "Erreur lors de l'import, aucune modification appliquée" });
+    console.error("[import/families] Stack:", errorStack);
+    res.status(500).json({ 
+      error: "Erreur lors de l'import, aucune modification appliquée",
+      details: errorMessage 
+    });
     return;
   }
 

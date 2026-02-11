@@ -649,31 +649,70 @@ class Storage {
     const nextNumber = (row?.maxNumber ?? 0) + 1;
     const createdAt = now();
     const updatedAt = now();
-    this.db
-      .prepare(
-        `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
-         housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      )
-      .run(
-        id,
-        nextNumber,
-        input.responsibleName ?? "",
-        input.phone ?? "",
-        input.address ?? "",
-        input.neighborhood ?? "",
-        // Utiliser au minimum 0, mais la contrainte DB peut nécessiter >= 1 pour les installations existantes
-        Math.max(0, input.memberCount ?? 0),
-        Math.max(0, input.childrenCount ?? 0),
-        input.housing ?? "not_housed",
-        input.housingName ?? "",
-        input.healthNotes ?? "",
-        input.hasMedicalNeeds ? 1 : 0,
-        input.notes ?? "",
-        createdAt,
-        updatedAt,
-        null,
-      );
+    
+    // S'assurer que memberCount est au minimum 1 pour éviter les erreurs de contrainte DB
+    // (certaines installations existantes peuvent avoir la contrainte >= 1)
+    const memberCount = Math.max(1, input.memberCount ?? 1);
+    const childrenCount = Math.max(0, input.childrenCount ?? 0);
+    const housing = input.housing ?? "not_housed";
+    
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
+           housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        )
+        .run(
+          id,
+          nextNumber,
+          input.responsibleName ?? "",
+          input.phone ?? "",
+          input.address ?? "",
+          input.neighborhood ?? "",
+          memberCount,
+          childrenCount,
+          housing,
+          input.housingName ?? "",
+          input.healthNotes ?? "",
+          input.hasMedicalNeeds ? 1 : 0,
+          input.notes ?? "",
+          createdAt,
+          updatedAt,
+          null,
+        );
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      // Si l'erreur est liée à member_count, essayer avec 1
+      if (errorMessage.includes("member_count") && memberCount === 0) {
+        this.db
+          .prepare(
+            `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
+             housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          )
+          .run(
+            id,
+            nextNumber,
+            input.responsibleName ?? "",
+            input.phone ?? "",
+            input.address ?? "",
+            input.neighborhood ?? "",
+            1, // Utiliser 1 au lieu de 0
+            childrenCount,
+            housing,
+            input.housingName ?? "",
+            input.healthNotes ?? "",
+            input.hasMedicalNeeds ? 1 : 0,
+            input.notes ?? "",
+            createdAt,
+            updatedAt,
+            null,
+          );
+      } else {
+        throw err;
+      }
+    }
     return this.getFamily(id)!;
   }
 
