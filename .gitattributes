@@ -1,0 +1,4 @@
+# Force LF for text files so lockfile and scripts are consistent on Windows and Linux
+* text=auto eol=lf
+*.{yml,yaml} text eol=lf
+*.{sh,json,md,ts,tsx,js,jsx,css,html} text eol=lf

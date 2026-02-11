@@ -278,6 +278,36 @@ Si tu as changé des variables d’environnement dans `.env`, un simple `pm2 res
 
 ---
 
+## Développement sur Windows, déploiement sur Ubuntu
+
+Si tu développes sur **Windows** (Cursor, etc.) et que tu déploies sur un **VPS Ubuntu**, voici ce qui peut poser problème et comment l’éviter.
+
+### Modules natifs (ex. `better-sqlite3`)
+
+Les modules comme `better-sqlite3` sont compilés pour un OS précis. Un binaire compilé sur Windows ne tourne pas sur Linux.
+
+- **À faire** : ne **jamais** copier le dossier `node_modules` de ta machine vers le VPS (ni par rsync, ni en l’archivant). Sur le VPS, installe toujours les dépendances **sur place** :
+  ```bash
+  cd ~/aide-famille
+  pnpm install --frozen-lockfile
+  ```
+- Le **lockfile** (`pnpm-lock.yaml`) est le même sur les deux OS : tu peux le modifier et le committer depuis Windows. C’est la liste des versions ; pnpm compile les modules natifs pour l’OS sur lequel tu lances `pnpm install`.
+
+### Fins de ligne (CRLF vs LF)
+
+Sous Windows, Git peut utiliser des fins de ligne CRLF ; sous Linux, c’est LF. Un `pnpm-lock.yaml` avec des CRLF peut provoquer des erreurs d’indentation (YAML invalide) sur le VPS.
+
+Le fichier **`.gitattributes`** à la racine du repo force LF pour les fichiers texte. Une fois commité, les prochains commits auront des fins de ligne cohérentes partout.
+
+### En résumé
+
+| Où | Action |
+|----|--------|
+| **Windows (dev)** | Éditer le code, lancer `pnpm install` / `pnpm dev`, committer et pousser (y compris `pnpm-lock.yaml`). Ne pas envoyer `node_modules` sur le VPS. |
+| **VPS (prod)** | `git pull`, puis **toujours** `pnpm install --frozen-lockfile` (ou `pnpm install` si le lockfile a été mis à jour), puis `pnpm build` et redémarrer l’app. |
+
+---
+
 ## Dépannage
 
 - **Écran blanc + erreurs 500 sur `/assets/*` dans la console** : en production, le serveur rejette les requêtes dont l’origine n’est pas autorisée. Ajoute dans `.env` l’URL exacte d’accès au site : `CORS_ORIGINS=http://46.202.173.225:3000` (remplace par ton IP si besoin), puis redémarre l’app (`pm2 restart aide-famille-hub`).
