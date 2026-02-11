@@ -46,10 +46,12 @@ sudo npm install -g pnpm
 pnpm -v
 ```
 
-### Installer Git (si pas déjà fait)
+### Installer Git et les outils de compilation
+
+Git pour cloner le projet. **build-essential** est requis pour compiler les modules natifs (ex. `better-sqlite3`) sur le serveur.
 
 ```bash
-sudo apt install -y git
+sudo apt install -y git build-essential
 ```
 
 ---
@@ -68,14 +70,16 @@ git clone https://github.com/TON_ORG/TON_REPO.git aide-famille-hub
 cd aide-famille-hub
 ```
 
-Si tu déploies depuis ta machine (sans Git sur le VPS), tu peux utiliser `rsync` ou `scp` pour copier le dossier du projet.
+Si tu déploies depuis ta machine (sans Git sur le VPS), copie **uniquement** le code source avec `rsync` ou `scp` **sans** le dossier `node_modules` (et sans copier `node_modules` depuis ta machine). Les dépendances doivent être installées **sur le VPS** pour que les modules natifs (comme `better-sqlite3`) soient compilés pour Linux.
 
-Installer les dépendances et construire l’app :
+Installer les dépendances et construire l’app **sur le VPS** :
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
 ```
+
+En cas d’erreur **« Could not locate the bindings file »** ou **« better_sqlite3.node »** : c’est que `better-sqlite3` n’a pas été compilé sur ce serveur. À faire sur le VPS : installer `build-essential` (voir section 2), supprimer `node_modules` puis réinstaller : `rm -rf node_modules && pnpm install --frozen-lockfile`, puis `pnpm build` et redémarrer l’app (ex. `pm2 restart all`).
 
 Vérifier que le build a créé les bons dossiers :
 

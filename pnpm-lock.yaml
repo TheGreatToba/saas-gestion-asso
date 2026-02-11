@@ -8,17 +8,15 @@ importers:
 
   .:
     dependencies:
-        specifier: ^5.1.1
-        version: 5.1.1
+      express:
+        specifier: ^5.1.0
+        version: 5.1.0
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
       dotenv:
         specifier: ^17.2.1
         version: 17.2.1
-      express:
-        specifier: ^5.1.0
-        version: 5.1.0
       zod:
         specifier: ^3.25.76
         version: 3.25.76
