@@ -117,13 +117,13 @@ export type Family = z.infer<typeof FamilySchema>;
 
 export const CreateFamilySchema = z.object({
   responsibleName: z.string().optional().default(""),
-  phone: z.string().min(1, "Téléphone requis"),
-  // Adresse et quartier deviennent optionnels : certaines familles n'ont pas d'adresse précise
+  phone: z.string().optional().default(""),
+  // Tous les champs sont optionnels
   address: z.string().optional().default(""),
   neighborhood: z.string().optional().default(""),
-  memberCount: z.number().int().min(1, "Min 1 membre"),
-  childrenCount: z.number().int().min(0),
-  housing: FamilyHousing,
+  memberCount: z.number().int().min(0).optional().default(0),
+  childrenCount: z.number().int().min(0).optional().default(0),
+  housing: FamilyHousing.optional().default("not_housed"),
   housingName: z.string().optional().default(""),
   healthNotes: z.string().optional().default(""),
   hasMedicalNeeds: z.boolean().optional().default(false),

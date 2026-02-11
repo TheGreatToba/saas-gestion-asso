@@ -59,7 +59,7 @@ function runMigrations(database: Database.Database): void {
       phone TEXT NOT NULL,
       address TEXT NOT NULL,
       neighborhood TEXT NOT NULL,
-      member_count INTEGER NOT NULL CHECK (member_count >= 1),
+      member_count INTEGER NOT NULL CHECK (member_count >= 0),
       children_count INTEGER NOT NULL CHECK (children_count >= 0),
       housing TEXT NOT NULL CHECK (housing IN ('housed', 'pending_placement', 'not_housed')),
       housing_name TEXT NOT NULL DEFAULT '',

@@ -629,14 +629,16 @@ class Storage {
   }
 
   createFamily(input: CreateFamilyInput): Family {
-    // Empêche la création de doublons évidents sur le téléphone
-    const existing = this.db
-      .prepare(
-        "SELECT 1 FROM families WHERE phone = ? AND archived = 0",
-      )
-      .get(input.phone);
-    if (existing) {
-      throw new Error("Une famille avec ce téléphone existe déjà");
+    // Empêche la création de doublons évidents sur le téléphone (seulement si le téléphone est fourni)
+    if (input.phone && input.phone.trim() !== "") {
+      const existing = this.db
+        .prepare(
+          "SELECT 1 FROM families WHERE phone = ? AND archived = 0",
+        )
+        .get(input.phone);
+      if (existing) {
+        throw new Error("Une famille avec ce téléphone existe déjà");
+      }
     }
 
     const id = "fam-" + generateId();
@@ -656,13 +658,14 @@ class Storage {
       .run(
         id,
         nextNumber,
-        input.responsibleName,
-        input.phone,
-        input.address,
-        input.neighborhood,
-        input.memberCount,
-        input.childrenCount,
-        input.housing,
+        input.responsibleName ?? "",
+        input.phone ?? "",
+        input.address ?? "",
+        input.neighborhood ?? "",
+        // Utiliser au minimum 0, mais la contrainte DB peut nécessiter >= 1 pour les installations existantes
+        Math.max(0, input.memberCount ?? 0),
+        Math.max(0, input.childrenCount ?? 0),
+        input.housing ?? "not_housed",
         input.housingName ?? "",
         input.healthNotes ?? "",
         input.hasMedicalNeeds ? 1 : 0,

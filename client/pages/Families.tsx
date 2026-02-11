@@ -48,9 +48,9 @@ const emptyForm: FamilyForm = {
   phone: "",
   address: "",
   neighborhood: "",
-  memberCount: 1,
+  memberCount: 0,
   childrenCount: 0,
-  // Valeur vide par défaut : l'utilisateur doit choisir un des 3 statuts
+  // Tous les champs sont optionnels
   housing: "",
   housingName: "",
   healthNotes: "",
@@ -127,19 +127,12 @@ export default function Families() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // L'hébergement est obligatoire : il faut choisir un des 3 statuts
-    if (!form.housing) {
-      toast({
-        title: "Statut d'hébergement requis",
-        description: "Veuillez sélectionner un des trois statuts d'hébergement.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // Tous les champs sont optionnels - utilisation de valeurs par défaut
     const payload: CreateFamilyInput = {
       ...form,
-      housing: form.housing,
+      housing: form.housing || "not_housed",
+      memberCount: form.memberCount || 0,
+      childrenCount: form.childrenCount || 0,
     };
 
     if (editingFamily) {
@@ -374,12 +367,11 @@ export default function Families() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Téléphone *</Label>
+                  <Label>Téléphone</Label>
                   <Input
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="06 XX XX XX XX"
-                    required
                     inputMode="tel"
                     autoComplete="tel"
                   />
@@ -411,13 +403,13 @@ export default function Families() {
                   <Label>Membres</Label>
                   <Input
                     type="number"
-                    min={1}
+                    min={0}
                     inputMode="numeric"
                     value={form.memberCount}
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        memberCount: parseInt(e.target.value) || 1,
+                        memberCount: parseInt(e.target.value) || 0,
                       })
                     }
                   />
@@ -438,7 +430,7 @@ export default function Families() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Hébergement (foyer) *</Label>
+                  <Label>Hébergement (foyer)</Label>
                   <Select
                     value={form.housing}
                     onValueChange={(v: FamilyHousing) =>
@@ -446,7 +438,7 @@ export default function Families() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un statut" />
+                      <SelectValue placeholder="Sélectionner un statut (optionnel)" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="housed">Hébergé en foyer</SelectItem>

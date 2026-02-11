@@ -159,40 +159,15 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       return;
     }
 
-    // Validation des champs requis avant création
-    if (!normalized.phone || normalized.phone.trim() === "") {
-      result.errors.push({
-        row: idx + 1,
-        message: "Téléphone requis",
-      });
-      return;
-    }
-
-    if (!normalized.housing) {
-      result.errors.push({
-        row: idx + 1,
-        message: "Statut d'hébergement requis (housed, pending_placement, ou not_housed)",
-      });
-      return;
-    }
-
-    if (!normalized.memberCount || normalized.memberCount < 1) {
-      result.errors.push({
-        row: idx + 1,
-        message: "Nombre de membres requis (minimum 1)",
-      });
-      return;
-    }
-
-    // Préparation des données selon le schéma actuel (responsibleName, address et neighborhood sont optionnels)
+    // Tous les champs sont optionnels - utilisation de valeurs par défaut
     const prepared: CreateFamilyInput = {
       responsibleName: normalized.responsibleName ?? "",
-      phone: normalized.phone,
+      phone: normalized.phone ?? "",
       address: normalized.address ?? "",
       neighborhood: normalized.neighborhood ?? "",
-      memberCount: normalized.memberCount,
+      memberCount: normalized.memberCount ?? 0,
       childrenCount: normalized.childrenCount ?? 0,
-      housing: normalized.housing,
+      housing: normalized.housing ?? "not_housed",
       housingName: normalized.housingName ?? "",
       healthNotes: normalized.healthNotes ?? "",
       hasMedicalNeeds: normalized.hasMedicalNeeds ?? false,
