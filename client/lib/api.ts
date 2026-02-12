@@ -17,7 +17,17 @@ import type {
   CreateCategoryInput,
   CreateArticleInput,
 } from "@shared/schema";
-import { getSessionToken, clearSession } from "@/lib/session";
+import { clearSession } from "@/lib/session";
+
+let csrfTokenCache: string | null = null;
+
+export async function getCsrfToken(): Promise<string> {
+  if (csrfTokenCache) return csrfTokenCache;
+  const res = await fetch("/api/csrf", { credentials: "include" });
+  const data = (await res.json()) as { csrfToken: string };
+  csrfTokenCache = data.csrfToken;
+  return csrfTokenCache;
+}
 
 type FetchJsonOptions = RequestInit & {
   /**
@@ -52,30 +62,30 @@ async function fetchJson<T>(
     ...requestInit
   } = options;
 
-  const token = getSessionToken();
+  const method = (requestInit.method || "GET").toUpperCase();
+  const isMutation = !["GET", "HEAD"].includes(method);
 
   let attempt = 0;
-  // On limite volontairement les retries implicites aux méthodes considérées comme sûres.
-  const method = (requestInit.method || "GET").toUpperCase();
   const maxRetriesForThisRequest =
     method === "GET" || method === "HEAD" ? retry : 0;
 
-  // Boucle de retry contrôlé
-  // - Timeout explicite via AbortController
-  // - Retry seulement en cas d'erreur réseau / timeout
   for (;;) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(requestInit.headers as Record<string, string>),
+      };
+      if (isMutation) {
+        headers["X-CSRF-Token"] = await getCsrfToken();
+      }
+
       const res = await fetch(url, {
         ...requestInit,
-        credentials: "include", // envoie le cookie auth_token (auth principale)
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...requestInit.headers,
-        },
+        credentials: "include",
+        headers,
         signal: controller.signal,
       });
 
@@ -184,13 +194,17 @@ export const api = {
   // Dashboard
   getDashboardStats: () => fetchJson<DashboardStats>("/api/dashboard/stats"),
 
-  // Families
-  getFamilies: (search?: string) =>
-    fetchJson<Family[]>(
-      search
-        ? `/api/families?search=${encodeURIComponent(search)}`
-        : "/api/families",
-    ),
+  // Families (paginated)
+  getFamilies: (params?: { limit?: number; offset?: number; search?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    if (params?.search) sp.set("search", params.search);
+    const q = sp.toString();
+    return fetchJson<{ items: Family[]; total: number }>(
+      q ? `/api/families?${q}` : "/api/families",
+    );
+  },
 
   getFamily: (id: string) => fetchJson<Family>(`/api/families/${id}`),
 
@@ -236,8 +250,17 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Needs (API returns enriched needs with priority score/level)
-  getNeeds: () => fetchJson<EnrichedNeed[]>("/api/needs"),
+  // Needs (paginated, returns enriched needs with priority score/level)
+  getNeeds: (params?: { limit?: number; offset?: number; familyId?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    if (params?.familyId) sp.set("familyId", params.familyId);
+    const q = sp.toString();
+    return fetchJson<{ items: EnrichedNeed[]; total: number }>(
+      q ? `/api/needs?${q}` : "/api/needs",
+    );
+  },
 
   getNeedsByFamily: (familyId: string) =>
     fetchJson<EnrichedNeed[]>(`/api/families/${familyId}/needs`),
@@ -259,8 +282,17 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Aids
-  getAids: () => fetchJson<Aid[]>("/api/aids"),
+  // Aids (paginated)
+  getAids: (params?: { limit?: number; offset?: number; familyId?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    if (params?.familyId) sp.set("familyId", params.familyId);
+    const q = sp.toString();
+    return fetchJson<{ items: Aid[]; total: number }>(
+      q ? `/api/aids?${q}` : "/api/aids",
+    );
+  },
 
   getAidsByFamily: (familyId: string) =>
     fetchJson<Aid[]>(`/api/families/${familyId}/aids`),

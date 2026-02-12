@@ -91,13 +91,78 @@ export async function deleteObjectByKey(key: string): Promise<void> {
   );
 }
 
+const CLAMAV_HOST = process.env.CLAMAV_HOST ?? "localhost";
+const CLAMAV_PORT = parseInt(process.env.CLAMAV_PORT ?? "3310", 10);
+const CLAMAV_TIMEOUT_MS = 30_000;
+const INSTREAM_CHUNK_SIZE = 2048;
+
 /**
- * Hook d'antivirus : à brancher sur un service externe (ClamAV, ICAP, SaaS…).
- * Pour l'instant, ne fait rien et accepte toujours.
+ * Scan buffer via ClamAV daemon (clamd) using INSTREAM protocol.
+ * When ANTIVIRUS_SCAN_ENABLED is "true", connects to clamd and streams the buffer.
+ * On FOUND or connection failure (in production), throws.
  */
-export async function scanBufferForViruses(_buffer: Buffer): Promise<void> {
-  if (process.env.ANTIVIRUS_SCAN_ENABLED === "true") {
-    // TODO: Intégrer ici l'appel vers un service ClamAV / ICAP / HTTP.
+export async function scanBufferForViruses(buffer: Buffer): Promise<void> {
+  if (process.env.ANTIVIRUS_SCAN_ENABLED !== "true") {
+    return;
   }
+
+  const { connect } = await import("node:net");
+
+  return new Promise((resolve, reject) => {
+    const socket = connect(
+      { host: CLAMAV_HOST, port: CLAMAV_PORT, timeout: CLAMAV_TIMEOUT_MS },
+      () => {
+        socket.write("zINSTREAM\0");
+        let offset = 0;
+        const writeNext = () => {
+          const len = Math.min(INSTREAM_CHUNK_SIZE, buffer.length - offset);
+          if (len <= 0) {
+            const zero = Buffer.alloc(4);
+            zero.writeUInt32BE(0, 0);
+            socket.write(zero, () => socket.end());
+            return;
+          }
+          const chunk = buffer.subarray(offset, offset + len);
+          offset += len;
+          const lenBuf = Buffer.alloc(4);
+          lenBuf.writeUInt32BE(len, 0);
+          const ok = socket.write(Buffer.concat([lenBuf, chunk]));
+          if (ok) {
+            setImmediate(writeNext);
+          } else {
+            socket.once("drain", () => setImmediate(writeNext));
+          }
+        };
+        setImmediate(writeNext);
+      },
+    );
+
+    let response = "";
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => {
+      response += chunk;
+    });
+    socket.on("end", () => {
+      const line = response.split("\n")[0]?.trim() ?? "";
+      if (line.endsWith("OK")) {
+        resolve();
+      } else if (line.includes("FOUND")) {
+        reject(new Error("Fichier rejeté par l’antivirus (menace détectée)."));
+      } else {
+        reject(new Error("Antivirus : réponse inattendue ou erreur de scan."));
+      }
+    });
+    socket.on("error", (err: Error) => {
+      const msg =
+        process.env.NODE_ENV === "production"
+          ? "Scan antivirus indisponible. Upload refusé."
+          : `Antivirus (clamd) indisponible: ${err.message}. En production l’upload serait refusé.`;
+      reject(new Error(msg));
+    });
+    socket.on("timeout", () => {
+      socket.destroy();
+      reject(new Error("Délai d’attente du scan antivirus dépassé."));
+    });
+  });
 }
 

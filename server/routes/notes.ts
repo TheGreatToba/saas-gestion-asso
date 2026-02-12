@@ -6,7 +6,7 @@ export const handleGetNotes: RequestHandler = (req, res) => {
   const notes = storage.getNotesByFamily(req.params.familyId as string);
   const user = (res as any).locals?.user;
   if (user) {
-    storage.appendAuditLog({
+    storage.appendAuditLog(user.organizationId ?? "org-default", {
       userId: user.id,
       userName: user.name,
       action: "updated",
@@ -42,7 +42,7 @@ export const handleCreateNote: RequestHandler = (req, res) => {
     volunteerName: user.name,
   });
   if (user) {
-    storage.appendAuditLog({
+    storage.appendAuditLog(user.organizationId ?? "org-default", {
       userId: user.id,
       userName: user.name,
       action: "created",

@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Package,
   Search,
+  Zap,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ interface NavItem {
 
 const adminNavItems: NavItem[] = [
   { path: ROUTES.dashboard, label: "Vue d'ensemble", icon: LayoutDashboard },
+  { path: ROUTES.intervention, label: "Intervention rapide", icon: Zap },
   { path: ROUTES.families, label: "Familles", icon: Users },
   { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
   { path: ROUTES.aids, label: "Aides", icon: Gift },
@@ -43,6 +45,7 @@ const adminNavItems: NavItem[] = [
 
 const volunteerNavItems: NavItem[] = [
   { path: ROUTES.dashboard, label: "Mes actions", icon: ClipboardList },
+  { path: ROUTES.intervention, label: "Intervention rapide", icon: Zap },
   { path: ROUTES.families, label: "Familles", icon: Users },
   { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
   { path: ROUTES.aids, label: "Aides", icon: Gift },

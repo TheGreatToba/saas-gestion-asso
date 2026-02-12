@@ -10,13 +10,14 @@ export const handleCreateUser: RequestHandler = (req, res) => {
       .json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
+  const actor = (res as any).locals?.user as
+    | { id: string; name: string; organizationId?: string }
+    | undefined;
+  const orgId = actor?.organizationId ?? "org-default";
   try {
-    const user = storage.createUser(parsed.data);
-    const actor = (res as any).locals?.user as
-      | { id: string; name: string }
-      | undefined;
+    const user = storage.createUser(parsed.data, orgId);
     if (actor) {
-      storage.appendAuditLog({
+      storage.appendAuditLog(actor.organizationId ?? "org-default", {
         userId: actor.id,
         userName: actor.name,
         action: "created",
@@ -42,7 +43,7 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
   }
 
   const actor = (res as any).locals?.user as
-    | { id: string; name: string }
+    | { id: string; name: string; organizationId?: string }
     | undefined;
   const targetId = req.params.id as string;
   const current = storage.getUser(targetId);
@@ -64,7 +65,7 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
     current.role === "admin" &&
     current.active &&
     (parsed.data.active === false || parsed.data.role === "volunteer");
-  if (willDeactivateAdmin && storage.countActiveAdmins() <= 1) {
+  if (willDeactivateAdmin && storage.countActiveAdmins(current.organizationId) <= 1) {
     res
       .status(400)
       .json({ error: "Au moins un administrateur actif est requis" });
@@ -78,7 +79,7 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
       return;
     }
     if (actor) {
-      storage.appendAuditLog({
+      storage.appendAuditLog(actor.organizationId ?? "org-default", {
         userId: actor.id,
         userName: actor.name,
         action: "updated",
@@ -96,7 +97,7 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
 
 export const handleDeleteUser: RequestHandler = (req, res) => {
   const actor = (res as any).locals?.user as
-    | { id: string; name: string }
+    | { id: string; name: string; organizationId?: string }
     | undefined;
   const targetId = req.params.id as string;
   const target = storage.getUser(targetId);
@@ -125,7 +126,7 @@ export const handleDeleteUser: RequestHandler = (req, res) => {
   }
 
   if (actor) {
-    storage.appendAuditLog({
+    storage.appendAuditLog(actor.organizationId ?? "org-default", {
       userId: actor.id,
       userName: actor.name,
       action: "deleted",

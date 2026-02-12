@@ -41,6 +41,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function Needs() {
   const { isAdmin } = useAuth();
@@ -54,16 +55,19 @@ export default function Needs() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterNeighborhood, setFilterNeighborhood] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [deleteNeedId, setDeleteNeedId] = useState<string | null>(null);
 
-  const { data: needs = [], isLoading, error } = useQuery({
+  const { data: needsData, isLoading, error } = useQuery({
     queryKey: ["needs-all"],
-    queryFn: api.getNeeds,
+    queryFn: () => api.getNeeds({ limit: 500, offset: 0 }),
   });
+  const needs = needsData?.items ?? [];
 
-  const { data: families = [] } = useQuery({
+  const { data: familiesData } = useQuery({
     queryKey: ["families"],
-    queryFn: () => api.getFamilies(),
+    queryFn: () => api.getFamilies({ limit: 500, offset: 0 }),
   });
+  const families = familiesData?.items ?? [];
 
   const familyMap = new Map(families.map((f) => [f.id, f]));
 
@@ -147,7 +151,15 @@ export default function Needs() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-
+      <ConfirmDialog
+        open={!!deleteNeedId}
+        onOpenChange={(open) => !open && setDeleteNeedId(null)}
+        title="Supprimer ce besoin ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteNeedId && deleteMutation.mutate(deleteNeedId)}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
@@ -381,9 +393,7 @@ export default function Needs() {
                           size="sm"
                           className="text-red-600"
                           onClick={() => {
-                            if (confirm("Supprimer ce besoin ?")) {
-                              deleteMutation.mutate(need.id);
-                            }
+                            setDeleteNeedId(need.id);
                           }}
                         >
                           <Trash2 className="w-4 h-4" />

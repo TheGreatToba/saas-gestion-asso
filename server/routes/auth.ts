@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import { LoginSchema, RegisterSchema } from "../../shared/schema";
 import { storage } from "../storage";
 import { createAuthToken } from "../auth-token";
+import { generateCsrfToken, setCsrfCookie } from "../csrf";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -26,17 +27,17 @@ export const handleLogin: RequestHandler = (req, res) => {
 
   const token = createAuthToken(result.user.id);
 
-  // Issue HttpOnly, SameSite cookie for the auth token.
-  // Keep JSON token in body for backwards-compatibility with existing clients.
   res.cookie("auth_token", token, {
     httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
-    // 12h like DEFAULT_TTL_SECONDS; browser may evict earlier.
     maxAge: 1000 * 60 * 60 * 12,
   });
 
-  res.json({ user: result.user, token });
+  const csrfToken = generateCsrfToken();
+  setCsrfCookie(res, csrfToken);
+
+  res.json({ user: result.user });
 };
 
 export const handleRegister: RequestHandler = (req, res) => {
@@ -48,23 +49,17 @@ export const handleRegister: RequestHandler = (req, res) => {
     return;
   }
   try {
-    const user = storage.createUser({
-      name: parsed.data.name,
-      email: parsed.data.email,
-      password: parsed.data.password,
-      // Inscription publique : toujours volunteer, compte à activer manuellement par un admin
-      role: "volunteer",
-      active: true,
-    });
-    const token = createAuthToken(user.id);
-    const isProduction = process.env.NODE_ENV === "production";
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 12,
-    });
-    res.status(201).json({ user, token });
+    const user = storage.createUser(
+      {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        password: parsed.data.password,
+        role: "volunteer",
+        active: false,
+      },
+      "org-default",
+    );
+    res.status(201).json({ user, pending: true });
   } catch (err) {
     const raw = err instanceof Error ? err.message : "Erreur serveur";
     console.error("[auth/register]", err);
@@ -96,7 +91,9 @@ export const handleLogout: RequestHandler = (_req, res) => {
   res.status(204).send();
 };
 
-export const handleGetUsers: RequestHandler = (_req, res) => {
-  const users = storage.getAllUsers();
+export const handleGetUsers: RequestHandler = (req, res) => {
+  const user = (res as any).locals?.user as { organizationId: string } | undefined;
+  const orgId = user?.organizationId ?? "org-default";
+  const users = storage.getAllUsers(orgId);
   res.json(users);
 };

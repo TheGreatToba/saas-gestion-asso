@@ -3,6 +3,7 @@ export const ROUTES = {
   login: "/login",
   register: "/register",
   dashboard: "/dashboard",
+  intervention: "/intervention",
   families: "/families",
   familyDetail: "/families/:id",
   needs: "/needs",

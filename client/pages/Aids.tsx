@@ -42,11 +42,13 @@ import { statusBadgeClasses } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function Aids() {
   const [searchParams] = useSearchParams();
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const [deleteAidId, setDeleteAidId] = useState<string | null>(null);
   const {
     categories,
     articles,
@@ -84,15 +86,17 @@ export default function Aids() {
   const [listSearch, setListSearch] = useState("");
 
   // ═══════ Data queries ═══════
-  const { data: aids = [], isLoading, error } = useQuery({
+  const { data: aidsData, isLoading, error } = useQuery({
     queryKey: ["aids-all"],
-    queryFn: api.getAids,
+    queryFn: () => api.getAids({ limit: 500, offset: 0 }),
   });
+  const aids = aidsData?.items ?? [];
 
-  const { data: families = [] } = useQuery({
+  const { data: familiesData } = useQuery({
     queryKey: ["families"],
-    queryFn: () => api.getFamilies(),
+    queryFn: () => api.getFamilies({ limit: 500, offset: 0 }),
   });
+  const families = familiesData?.items ?? [];
 
   const { data: familyNeeds = [] } = useQuery({
     queryKey: ["family-needs", selectedFamilyId],
@@ -302,6 +306,15 @@ export default function Aids() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+      <ConfirmDialog
+        open={!!deleteAidId}
+        onOpenChange={(open) => !open && setDeleteAidId(null)}
+        title="Supprimer cette aide ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteAidId && deleteMutation.mutate(deleteAidId)}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         {/* Page Header */}
@@ -772,15 +785,7 @@ export default function Aids() {
                           variant="ghost"
                           size="icon"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                "Supprimer cette aide ? Cette action est irréversible.",
-                              )
-                            ) {
-                              deleteMutation.mutate(aid.id);
-                            }
-                          }}
+                          onClick={() => setDeleteAidId(aid.id)}
                           aria-label="Supprimer l'aide"
                         >
                           <Trash2 className="w-4 h-4" />

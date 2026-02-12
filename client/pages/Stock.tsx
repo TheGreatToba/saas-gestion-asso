@@ -35,8 +35,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCategories } from "@/lib/useCategories";
-import type { Article } from "@shared/schema";
+import type { Article, Category } from "@shared/schema";
 import { toast } from "@/components/ui/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type StockFilter = "all" | "low" | "empty" | "ok";
 
@@ -50,6 +51,9 @@ export default function Stock() {
     getArticlesForCategory,
     lowStockArticles,
   } = useCategories();
+
+  const [deleteCategory, setDeleteCategory] = useState<Category | null>(null);
+  const [deleteArticle, setDeleteArticle] = useState<Article | null>(null);
 
   // ═══════ Search & Filters ═══════
   const [search, setSearch] = useState("");
@@ -274,6 +278,24 @@ export default function Stock() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+      <ConfirmDialog
+        open={!!deleteCategory}
+        onOpenChange={(open) => !open && setDeleteCategory(null)}
+        title="Supprimer cette catégorie ?"
+        description={deleteCategory ? `"${deleteCategory.name}" et tous ses articles seront supprimés. Cette action est irréversible.` : ""}
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteCategory && deleteCatMutation.mutate(deleteCategory.id)}
+      />
+      <ConfirmDialog
+        open={!!deleteArticle}
+        onOpenChange={(open) => !open && setDeleteArticle(null)}
+        title="Supprimer cet article ?"
+        description={deleteArticle ? `"${deleteArticle.name}" sera supprimé. Cette action est irréversible.` : ""}
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteArticle && deleteArticleMutation.mutate(deleteArticle.id)}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         {/* Page Header */}
@@ -455,7 +477,7 @@ export default function Stock() {
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                          onClick={() => { if (confirm(`Supprimer "${cat.name}" et tous ses articles ?`)) deleteCatMutation.mutate(cat.id); }}>
+                          onClick={() => setDeleteCategory(cat)}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -519,7 +541,7 @@ export default function Stock() {
                                   <Edit className="w-3.5 h-3.5" />
                                 </Button>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                  onClick={() => { if (confirm(`Supprimer "${art.name}" ?`)) deleteArticleMutation.mutate(art.id); }}>
+                                  onClick={() => setDeleteArticle(art)}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>

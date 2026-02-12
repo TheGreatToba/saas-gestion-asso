@@ -22,8 +22,16 @@ function getDb(): Database.Database {
   return db;
 }
 
+const DEFAULT_ORG_ID = "org-default";
+
 function runMigrations(database: Database.Database): void {
   database.exec(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -206,6 +214,48 @@ function runMigrations(database: Database.Database): void {
   if (!hasFileKey) {
     database.exec("ALTER TABLE family_documents ADD COLUMN file_key TEXT;");
   }
+
+  // Multi-tenant: organization_id on all tenant-scoped tables
+  const tablesWithOrg = [
+    "users",
+    "families",
+    "categories",
+    "articles",
+    "needs",
+    "aids",
+    "visit_notes",
+    "audit_logs",
+    "family_documents",
+  ] as const;
+  const nowIso = new Date().toISOString();
+  const hasOrgs = database
+    .prepare("SELECT 1 FROM organizations LIMIT 1")
+    .get();
+  if (!hasOrgs) {
+    database
+      .prepare(
+        "INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(DEFAULT_ORG_ID, "Default", "default", nowIso);
+  }
+  for (const table of tablesWithOrg) {
+    const cols = database
+      .prepare(`PRAGMA table_info(${table})`)
+      .all() as { name: string }[];
+    if (cols.some((c) => c.name === "organization_id")) continue;
+    database.exec(`ALTER TABLE ${table} ADD COLUMN organization_id TEXT;`);
+    database
+      .prepare(`UPDATE ${table} SET organization_id = ? WHERE organization_id IS NULL`)
+      .run(DEFAULT_ORG_ID);
+  }
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_families_org_number ON families(organization_id, number) WHERE number IS NOT NULL AND archived = 0;
+    CREATE INDEX IF NOT EXISTS idx_families_organization ON families(organization_id);
+    CREATE INDEX IF NOT EXISTS idx_users_organization ON users(organization_id);
+    CREATE INDEX IF NOT EXISTS idx_categories_organization ON categories(organization_id);
+    CREATE INDEX IF NOT EXISTS idx_needs_organization ON needs(organization_id);
+    CREATE INDEX IF NOT EXISTS idx_aids_organization ON aids(organization_id);
+  `);
 }
 
 function now(): string {
@@ -858,6 +908,27 @@ function seedIfEmpty(database: Database.Database): void {
     ],
   ];
   for (const row of notes) insNote.run(...row);
+
+  // Ensure all seeded rows have organization_id (multi-tenant)
+  const tablesWithOrg = [
+    "users",
+    "categories",
+    "articles",
+    "families",
+    "needs",
+    "aids",
+    "visit_notes",
+  ] as const;
+  for (const table of tablesWithOrg) {
+    const cols = database
+      .prepare(`PRAGMA table_info(${table})`)
+      .all() as { name: string }[];
+    if (cols.some((c) => c.name === "organization_id")) {
+      database
+        .prepare(`UPDATE ${table} SET organization_id = ? WHERE organization_id IS NULL`)
+        .run(DEFAULT_ORG_ID);
+    }
+  }
 }
 
 export { getDb };

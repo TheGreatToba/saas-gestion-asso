@@ -59,7 +59,7 @@ import {
   handleAdjustArticleStock,
 } from "./routes/articles";
 import { handleSearch } from "./routes/search";
-import { handleGetAuditLogs } from "./routes/audit";
+import { handleGetAuditLogs, handlePruneAuditLogs } from "./routes/audit";
 import { handleImportFamilies } from "./routes/import";
 import {
   handleGetFamilyDocuments,
@@ -70,6 +70,7 @@ import {
 import { storage } from "./storage";
 import { verifyAuthToken } from "./auth-token";
 import { rateLimitLogin } from "./rate-limit";
+import { requireCsrf, generateCsrfToken, setCsrfCookie } from "./csrf";
 import { asyncHandler, AppError, isAppError } from "./errors";
 import {
   generateRequestId,
@@ -77,22 +78,23 @@ import {
   logInfo,
   notifyOnSevereError,
 } from "./logger";
+import { recordRequest, getMetrics } from "./metrics";
+import { getDb } from "./db";
 
 const isProduction = process.env.NODE_ENV === "production";
 
 // ---------- Auth Middleware ----------
 
 /**
- * Requires a valid auth token, either from Authorization header (Bearer)
- * or from the "auth_token" cookie. Attaches the user to res.locals.user.
+ * Requires a valid auth token from the "auth_token" cookie (primary) or
+ * Authorization Bearer header (deprecated fallback). Attaches the user to res.locals.user.
  */
 const requireAuth: RequestHandler = (req, res, next) => {
-  const header = req.headers.authorization;
-  const headerToken = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-  // Prefer header token if present (for backwards-compatibility during migration)
   const cookieToken =
     (req as any).cookies?.auth_token ?? (req as any).signedCookies?.auth_token;
-  const token = headerToken ?? cookieToken;
+  const header = req.headers.authorization;
+  const headerToken = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  const token = cookieToken ?? headerToken;
   if (!token) {
     res.status(401).json({ error: "Authentification requise" });
     return;
@@ -171,18 +173,23 @@ export function createServer() {
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(cookieParser());
 
-  // Request context + access logging
+  // CSRF: validate token on mutating requests (POST/PUT/PATCH/DELETE)
+  app.use(requireCsrf);
+
+  // Request context + access logging + metrics
   app.use((req, res, next) => {
     const start = Date.now();
     const requestId =
       (req.headers["x-request-id"] as string | undefined) ?? generateRequestId();
     (res as any).locals.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
 
     res.on("finish", () => {
       const latencyMs = Date.now() - start;
       const user = (res as any).locals?.user as
         | { id: string }
         | undefined;
+      recordRequest(res.statusCode, latencyMs);
       logInfo("request_completed", {
         requestId,
         method: req.method,
@@ -201,12 +208,34 @@ export function createServer() {
     res.status(200).json({ status: "ok" });
   });
 
+  // Deep health check (DB connectivity)
+  app.get("/api/health", (_req, res) => {
+    try {
+      getDb().prepare("SELECT 1").get();
+      res.status(200).json({ status: "ok", db: "ok" });
+    } catch (e) {
+      res.status(503).json({ status: "degraded", db: "error" });
+    }
+  });
+
+  // Metrics (admin only)
+  app.get("/api/metrics", requireAuth, requireAdmin, (_req, res) => {
+    res.status(200).json(getMetrics());
+  });
+
   // Legacy routes (public)
   app.get("/api/ping", (_req, res) => {
     const ping = process.env.PING_MESSAGE ?? "ping";
     res.json({ message: ping });
   });
   app.get("/api/demo", handleDemo);
+
+  // CSRF token (public): sets cookie and returns token for client to send on mutations
+  app.get("/api/csrf", (req, res) => {
+    const token = generateCsrfToken();
+    setCsrfCookie(res, token);
+    res.json({ csrfToken: token });
+  });
 
   // Auth (public — login and register don't require auth)
   app.post("/api/auth/login", rateLimitLogin, asyncHandler(handleLogin));
@@ -306,6 +335,12 @@ export function createServer() {
     requireAuth,
     requireAdmin,
     asyncHandler(handleGetAuditLogs),
+  );
+  app.post(
+    "/api/audit-logs/prune",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handlePruneAuditLogs),
   );
   app.post(
     "/api/import/families",

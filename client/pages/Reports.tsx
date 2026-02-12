@@ -40,6 +40,7 @@ import type { CreateFamilyInput, EnrichedNeed } from "@shared/schema";
 import { priorityBadgeClasses } from "@/lib/utils";
 import { parseCsv, normalizeHeader } from "@/lib/csv";
 import { toast } from "@/components/ui/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -112,16 +113,18 @@ export default function Reports() {
   const [duplicateStrategy, setDuplicateStrategy] = useState<"skip" | "update">("skip");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<import("@shared/api").ImportFamiliesResult | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: api.getDashboardStats,
   });
 
-  const { data: families = [] } = useQuery({
+  const { data: familiesData } = useQuery({
     queryKey: ["families"],
-    queryFn: () => api.getFamilies(),
+    queryFn: () => api.getFamilies({ limit: 500, offset: 0 }),
   });
+  const families = familiesData?.items ?? [];
 
   // Admin: reset complet des familles (hard delete)
   const resetFamiliesMutation = useMutation({
@@ -143,15 +146,17 @@ export default function Reports() {
     },
   });
 
-  const { data: needs = [] } = useQuery({
+  const { data: needsData } = useQuery({
     queryKey: ["needs-all"],
-    queryFn: api.getNeeds,
+    queryFn: () => api.getNeeds({ limit: 500, offset: 0 }),
   });
+  const needs = needsData?.items ?? [];
 
-  const { data: aids = [] } = useQuery({
+  const { data: aidsData } = useQuery({
     queryKey: ["aids-all"],
-    queryFn: api.getAids,
+    queryFn: () => api.getAids({ limit: 500, offset: 0 }),
   });
+  const aids = aidsData?.items ?? [];
 
   const { data: auditLogs = [] } = useQuery({
     queryKey: ["audit-logs"],
@@ -482,7 +487,15 @@ export default function Reports() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-
+      <ConfirmDialog
+        open={showResetConfirm}
+        onOpenChange={setShowResetConfirm}
+        title="Réinitialiser toutes les familles ?"
+        description="Cette action va supprimer TOUTES les familles (et leurs enfants, besoins, aides, notes, documents), mais conservera les comptes utilisateurs. Es-tu sûr de vouloir continuer ?"
+        confirmLabel="Réinitialiser"
+        variant="destructive"
+        onConfirm={() => resetFamiliesMutation.mutate()}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
@@ -565,16 +578,7 @@ export default function Reports() {
                   size="sm"
                   className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
                   disabled={resetFamiliesMutation.isPending}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        "Cette action va supprimer TOUTES les familles (et leurs enfants, besoins, aides, notes, documents), mais conservera les comptes utilisateurs.\n\nEs-tu sûr de vouloir réinitialiser toutes les familles ?",
-                      )
-                    ) {
-                      return;
-                    }
-                    resetFamiliesMutation.mutate();
-                  }}
+                  onClick={() => setShowResetConfirm(true)}
                 >
                   Supprimer toutes les familles
                 </Button>

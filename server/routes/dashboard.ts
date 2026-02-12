@@ -1,11 +1,17 @@
 import { RequestHandler } from "express";
 import { storage } from "../storage";
 
+function getOrgId(res: any): string {
+  return (res.locals?.user as { organizationId?: string } | undefined)?.organizationId ?? "org-default";
+}
+
 export const handleGetDashboardStats: RequestHandler = (_req, res) => {
-  res.json(storage.getDashboardStats());
+  const orgId = getOrgId(res);
+  res.json(storage.getDashboardStats(orgId));
 };
 
 export const handleGetExportData: RequestHandler = (req, res) => {
+  const orgId = getOrgId(res);
   const limit = req.query.limit ? Number(req.query.limit) : undefined;
   const offset = req.query.offset ? Number(req.query.offset) : undefined;
 
@@ -17,7 +23,7 @@ export const handleGetExportData: RequestHandler = (req, res) => {
     return;
   }
 
-  const result = storage.getExportData({
+  const result = storage.getExportData(orgId, {
     limit: limit ?? 200,
     offset: offset ?? 0,
   });

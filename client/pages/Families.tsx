@@ -38,6 +38,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type FamilyForm = Omit<CreateFamilyInput, "housing"> & {
   housing: FamilyHousing | "";
@@ -67,6 +68,7 @@ export default function Families() {
   const [showForm, setShowForm] = useState(searchParams.get("action") === "add");
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
   const [form, setForm] = useState<FamilyForm>(emptyForm);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -75,10 +77,16 @@ export default function Families() {
     return () => clearTimeout(handler);
   }, [searchInput]);
 
-  const { data: families = [], isLoading, error } = useQuery({
+  const { data: familiesData, isLoading, error } = useQuery({
     queryKey: ["families", search],
-    queryFn: () => api.getFamilies(search || undefined),
+    queryFn: () =>
+      api.getFamilies({
+        search: search || undefined,
+        limit: 500,
+        offset: 0,
+      }),
   });
+  const families = familiesData?.items ?? [];
 
   const medicalFilter = searchParams.get("medical") === "1";
   const visibleFamilies = medicalFilter
@@ -329,11 +337,7 @@ export default function Families() {
                         variant="outline"
                         size="sm"
                         className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => {
-                          if (confirm("Supprimer cette famille et toutes ses données ?")) {
-                            deleteMutation.mutate(family.id);
-                          }
-                        }}
+                        onClick={() => setDeleteConfirm({ id: family.id })}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -345,7 +349,15 @@ export default function Families() {
           </div>
         )}
 
-        {/* Create/Edit Dialog */}
+        <ConfirmDialog
+          open={!!deleteConfirm}
+          onOpenChange={(open) => !open && setDeleteConfirm(null)}
+          title="Supprimer cette famille ?"
+          description="Cette famille et toutes ses données (enfants, besoins, aides, notes, documents) seront supprimées. Cette action est irréversible."
+          confirmLabel="Supprimer"
+          variant="destructive"
+          onConfirm={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
+        />
         <Dialog open={showForm || !!editingFamily} onOpenChange={closeDialog}>
           <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>

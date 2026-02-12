@@ -7,8 +7,8 @@ import {
 } from "react";
 import type { User } from "@shared/schema";
 import type { LoginResponse } from "@shared/api";
-import { clearSession, readSession, setSessionToken, writeSession } from "@/lib/session";
-import { api } from "@/lib/api";
+import { clearSession, readSession, writeSession } from "@/lib/session";
+import { api, getCsrfToken } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
@@ -20,7 +20,7 @@ interface AuthContextType {
     name: string;
     email: string;
     password: string;
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
@@ -32,15 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Preload CSRF token so login/register can send it
+  useEffect(() => {
+    getCsrfToken().catch(() => {});
+  }, []);
+
   // Initialize user from session on mount
   useEffect(() => {
-    // 1) Lecture optimiste depuis localStorage pour éviter le flash de logout.
     const session = readSession();
     if (session?.user) {
       setUser(session.user);
     }
 
-    // 2) Vérification serveur de la session réelle via le cookie HttpOnly.
     api
       .getMe()
       .then((me) => {
@@ -49,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         setUser(null);
         clearSession();
-        setSessionToken(null);
       })
       .finally(() => {
         setIsLoading(false);
@@ -58,9 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
         body: JSON.stringify({ email, password }),
       });
 
@@ -75,14 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = (await res.json()) as LoginResponse;
-
-      // En phase de migration, on ne dépend plus du token côté client :
-      // le cookie HttpOnly sert de source d'autorisation principale.
-      writeSession({ user: data.user, token: data.token });
-
-      // Update user state last to trigger re-render
+      writeSession({ user: data.user });
       setUser(data.user);
-
       return { success: true };
     } catch {
       return {
@@ -99,9 +100,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string;
   }) => {
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
         body: JSON.stringify(data),
       });
 
@@ -116,8 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { user, token } = responseData as LoginResponse;
-      writeSession({ user, token });
+      if (responseData.pending) {
+        return { success: true, pending: true };
+      }
+
+      const { user } = responseData as LoginResponse;
+      writeSession({ user });
       setUser(user);
       return { success: true };
     } catch {
@@ -131,18 +141,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      // Demander au serveur d'invalider le cookie auth_token.
+      const csrfToken = await getCsrfToken();
       await fetch("/api/auth/logout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
       });
     } catch {
       // On ignore les erreurs réseau : on nettoie quand même le client.
     } finally {
       setUser(null);
       clearSession();
-      setSessionToken(null);
     }
   };
 

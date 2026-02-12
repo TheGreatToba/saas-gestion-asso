@@ -2,8 +2,23 @@ import { RequestHandler } from "express";
 import { CreateAidSchema } from "../../shared/schema";
 import { storage } from "../storage";
 
-export const handleGetAids: RequestHandler = (_req, res) => {
-  res.json(storage.getAllAids());
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 200;
+
+function getOrgId(res: any): string {
+  return (res.locals?.user as { organizationId?: string } | undefined)?.organizationId ?? "org-default";
+}
+
+export const handleGetAids: RequestHandler = (req, res) => {
+  const orgId = getOrgId(res);
+  const limit = Math.min(
+    Math.max(1, Number(req.query.limit) || DEFAULT_PAGE_LIMIT),
+    MAX_PAGE_LIMIT,
+  );
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const familyId = (req.query.familyId as string) || undefined;
+  const result = storage.getAidsPage(orgId, { limit, offset, familyId });
+  res.json(result);
 };
 
 export const handleGetAidsByFamily: RequestHandler = (req, res) => {
@@ -32,7 +47,7 @@ export const handleCreateAid: RequestHandler = (req, res) => {
   });
 
   if (user) {
-    storage.appendAuditLog({
+    storage.appendAuditLog(user.organizationId ?? "org-default", {
       userId: user.id,
       userName: user.name,
       action: "created",
@@ -53,7 +68,7 @@ export const handleDeleteAid: RequestHandler = (req, res) => {
   }
   const user = (res as any).locals?.user;
   if (user) {
-    storage.appendAuditLog({
+    storage.appendAuditLog(user.organizationId ?? "org-default", {
       userId: user.id,
       userName: user.name,
       action: "deleted",

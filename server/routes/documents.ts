@@ -7,6 +7,7 @@ import {
   scanBufferForViruses,
   uploadFamilyDocumentObject,
 } from "../object-storage";
+import { validateMagicBytes } from "../document-validation";
 
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024; // ~5Mo
 const ALLOWED_MIME_PREFIXES = ["image/", "application/pdf"];
@@ -87,7 +88,14 @@ export const handleCreateFamilyDocument: RequestHandler = async (req, res) => {
   try {
     const buffer = Buffer.from(base64, "base64");
 
-    // Hook antivirus optionnel
+    try {
+      validateMagicBytes(buffer, mimeType);
+    } catch (validationErr) {
+      const msg = validationErr instanceof Error ? validationErr.message : "Type de fichier invalide";
+      res.status(400).json({ error: msg });
+      return;
+    }
+
     await scanBufferForViruses(buffer);
 
     // Upload dans le stockage objet

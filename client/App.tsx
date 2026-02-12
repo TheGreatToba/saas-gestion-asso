@@ -18,6 +18,7 @@ import FamilyDetail from "./pages/FamilyDetail";
 import Needs from "./pages/Needs";
 import Aids from "./pages/Aids";
 import Stock from "./pages/Stock";
+import Intervention from "./pages/Intervention";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
@@ -147,6 +148,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Needs />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path={ROUTES.intervention}
+                element={
+                  <ProtectedRoute>
+                    <Intervention />
                   </ProtectedRoute>
                 }
               />

@@ -24,6 +24,8 @@ import type {
 import { getDb } from "./db";
 import type Database from "better-sqlite3";
 import { hashPassword, isPasswordHash, verifyPassword } from "./passwords";
+import { FamiliesRepository, mapFamilyRow, type FamilyRow } from "./repositories/families.repository";
+import { FamilyService } from "./services/family.service";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -40,6 +42,7 @@ type UserRow = {
   email: string;
   role: string;
   active: number;
+  organization_id: string | null;
 };
 function mapUser(r: UserRow): User {
   return {
@@ -48,46 +51,7 @@ function mapUser(r: UserRow): User {
     email: r.email,
     role: r.role as User["role"],
     active: !!r.active,
-  };
-}
-
-type FamilyRow = {
-  id: string;
-  number: number | null;
-  responsible_name: string;
-  phone: string;
-  address: string;
-  neighborhood: string;
-  member_count: number;
-  children_count: number;
-  housing: string;
-  housing_name: string;
-  health_notes: string;
-  has_medical_needs: number;
-  notes: string;
-  created_at: string;
-  updated_at: string;
-  last_visit_at: string | null;
-  archived: number;
-};
-function mapFamily(r: FamilyRow): Family {
-  return {
-    id: r.id,
-    number: r.number ?? 0,
-    responsibleName: r.responsible_name,
-    phone: r.phone,
-    address: r.address,
-    neighborhood: r.neighborhood,
-    memberCount: r.member_count,
-    childrenCount: r.children_count,
-    housing: r.housing as Family["housing"],
-    housingName: r.housing_name ?? "",
-    healthNotes: r.health_notes ?? "",
-    hasMedicalNeeds: !!r.has_medical_needs,
-    notes: r.notes ?? "",
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-    lastVisitAt: r.last_visit_at ?? null,
+    organizationId: r.organization_id ?? "org-default",
   };
 }
 
@@ -280,9 +244,14 @@ function mapFamilyDocument(r: FamilyDocumentRow): FamilyDocument {
 
 class Storage {
   private testDb?: Database.Database;
+  private familiesRepo: FamiliesRepository;
+  private familyService: FamilyService;
 
   constructor(testDb?: Database.Database) {
     this.testDb = testDb;
+    const getDbInstance = () => this.testDb ?? getDb();
+    this.familiesRepo = new FamiliesRepository(getDbInstance);
+    this.familyService = new FamilyService(this.familiesRepo);
   }
 
   private get db(): Database.Database {
@@ -318,33 +287,37 @@ class Storage {
 
   getUser(id: string): User | null {
     const r = this.db
-      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
+      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE id = ?")
       .get(id) as UserRow | undefined;
     return r ? mapUser(r) : null;
   }
 
-  getAllUsers(): User[] {
+  getAllUsers(organizationId: string): User[] {
     const rows = this.db
-      .prepare("SELECT id, name, email, role, active FROM users ORDER BY role DESC, name")
-      .all() as UserRow[];
+      .prepare(
+        "SELECT id, name, email, role, active, organization_id FROM users WHERE organization_id = ? ORDER BY role DESC, name",
+      )
+      .all(organizationId) as UserRow[];
     return rows.map(mapUser);
   }
 
   getUserByEmail(email: string): User | null {
     const r = this.db
-      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
+      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE email = ?")
       .get(email) as UserRow | undefined;
     return r ? mapUser(r) : null;
   }
 
-  countActiveAdmins(): number {
+  countActiveAdmins(organizationId: string): number {
     const row = this.db
-      .prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' AND active = 1")
-      .get() as { c: number };
+      .prepare(
+        "SELECT COUNT(*) as c FROM users WHERE organization_id = ? AND role = 'admin' AND active = 1",
+      )
+      .get(organizationId) as { c: number };
     return row.c;
   }
 
-  createUser(input: CreateUserInput): User {
+  createUser(input: CreateUserInput, organizationId: string): User {
     const existing = this.db
       .prepare("SELECT 1 FROM users WHERE email = ?")
       .get(input.email);
@@ -356,9 +329,16 @@ class Storage {
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
-          "INSERT INTO users (id, name, email, role, active) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO users (id, name, email, role, active, organization_id) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .run(id, input.name, input.email, input.role, input.active ? 1 : 0);
+        .run(
+          id,
+          input.name,
+          input.email,
+          input.role,
+          input.active ? 1 : 0,
+          organizationId,
+        );
       this.db
         .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
         .run(id, hashPassword(input.password));
@@ -370,7 +350,7 @@ class Storage {
 
   updateUser(id: string, input: UpdateUserInput): User | null {
     const current = this.db
-      .prepare("SELECT id, name, email, role, active FROM users WHERE id = ?")
+      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE id = ?")
       .get(id) as UserRow | undefined;
     if (!current) return null;
 
@@ -485,11 +465,10 @@ class Storage {
     return info.changes > 0;
   }
 
-  getCategoryLabels(): Record<string, string> {
-    const rows = this.db.prepare("SELECT id, name FROM categories").all() as {
-      id: string;
-      name: string;
-    }[];
+  getCategoryLabels(organizationId: string): Record<string, string> {
+    const rows = this.db
+      .prepare("SELECT id, name FROM categories WHERE organization_id = ?")
+      .all(organizationId) as { id: string; name: string }[];
     const map: Record<string, string> = {};
     for (const row of rows) map[row.id] = row.name;
     return map;
@@ -610,205 +589,54 @@ class Storage {
 
   // ==================== FAMILIES ====================
 
-  getAllFamilies(): Family[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM families WHERE archived = 0 ORDER BY (number IS NULL), number ASC, created_at ASC",
-      )
-      .all() as FamilyRow[];
-    return rows.map(mapFamily);
+  getAllFamilies(organizationId: string): Family[] {
+    return this.familyService.getAllFamilies(organizationId);
   }
 
-  getFamily(id: string): Family | null {
-    const r = this.db
-      .prepare("SELECT * FROM families WHERE id = ? AND archived = 0")
-      .get(id) as
-      | FamilyRow
-      | undefined;
-    return r ? mapFamily(r) : null;
+  getFamiliesPage(
+    organizationId: string,
+    opts: { limit: number; offset: number; search?: string },
+  ): { items: Family[]; total: number } {
+    return this.familyService.getFamiliesPage(organizationId, opts);
   }
 
-  createFamily(input: CreateFamilyInput): Family {
-    // Empêche la création de doublons évidents sur le téléphone (seulement si le téléphone est fourni)
-    if (input.phone && input.phone.trim() !== "") {
-      const existing = this.db
-        .prepare(
-          "SELECT 1 FROM families WHERE phone = ? AND archived = 0",
-        )
-        .get(input.phone);
-      if (existing) {
-        throw new Error("Une famille avec ce téléphone existe déjà");
-      }
-    }
-
-    const id = "fam-" + generateId();
-    // Prochain numéro séquentiel : max(number) + 1 (en ignorant les NULL)
-    const row = this.db
-      .prepare("SELECT MAX(number) as maxNumber FROM families")
-      .get() as { maxNumber: number | null };
-    const nextNumber = (row?.maxNumber ?? 0) + 1;
-    const createdAt = now();
-    const updatedAt = now();
-    
-    // S'assurer que memberCount est au minimum 1 pour éviter les erreurs de contrainte DB
-    // (certaines installations existantes peuvent avoir la contrainte >= 1)
-    const memberCount = Math.max(1, input.memberCount ?? 1);
-    const childrenCount = Math.max(0, input.childrenCount ?? 0);
-    const housing = input.housing ?? "not_housed";
-    
-    try {
-      this.db
-        .prepare(
-          `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
-           housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-        )
-        .run(
-          id,
-          nextNumber,
-          input.responsibleName ?? "",
-          input.phone ?? "",
-          input.address ?? "",
-          input.neighborhood ?? "",
-          memberCount,
-          childrenCount,
-          housing,
-          input.housingName ?? "",
-          input.healthNotes ?? "",
-          input.hasMedicalNeeds ? 1 : 0,
-          input.notes ?? "",
-          createdAt,
-          updatedAt,
-          null,
-        );
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      // Si l'erreur est liée à member_count, essayer avec 1
-      if (errorMessage.includes("member_count") && memberCount === 0) {
-        this.db
-          .prepare(
-            `INSERT INTO families (id, number, responsible_name, phone, address, neighborhood, member_count, children_count,
-             housing, housing_name, health_notes, has_medical_needs, notes, created_at, updated_at, last_visit_at, archived)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-          )
-          .run(
-            id,
-            nextNumber,
-            input.responsibleName ?? "",
-            input.phone ?? "",
-            input.address ?? "",
-            input.neighborhood ?? "",
-            1, // Utiliser 1 au lieu de 0
-            childrenCount,
-            housing,
-            input.housingName ?? "",
-            input.healthNotes ?? "",
-            input.hasMedicalNeeds ? 1 : 0,
-            input.notes ?? "",
-            createdAt,
-            updatedAt,
-            null,
-          );
-      } else {
-        throw err;
-      }
-    }
-    return this.getFamily(id)!;
+  getFamiliesByIds(organizationId: string, ids: string[]): Family[] {
+    return this.familyService.getFamiliesByIds(organizationId, ids);
   }
 
-  updateFamily(id: string, input: Partial<CreateFamilyInput>): Family | null {
-    const r = this.db
-      .prepare("SELECT * FROM families WHERE id = ? AND archived = 0")
-      .get(id) as
-      | FamilyRow
-      | undefined;
-    if (!r) return null;
-
-    // Si le téléphone change, vérifier qu'il n'est pas déjà utilisé
-    if (input.phone && input.phone !== r.phone) {
-      const conflict = this.db
-        .prepare(
-          "SELECT 1 FROM families WHERE phone = ? AND archived = 0 AND id != ?",
-        )
-        .get(input.phone, id);
-      if (conflict) {
-        throw new Error("Une autre famille utilise déjà ce téléphone");
-      }
-    }
-    const updatedAt = now();
-    this.db
-      .prepare(
-        `UPDATE families SET responsible_name = ?, phone = ?, address = ?, neighborhood = ?, member_count = ?, children_count = ?,
-         housing = ?, housing_name = ?, health_notes = ?, has_medical_needs = ?, notes = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .run(
-        input.responsibleName ?? r.responsible_name,
-        input.phone ?? r.phone,
-        input.address ?? r.address,
-        input.neighborhood ?? r.neighborhood,
-        input.memberCount ?? r.member_count,
-        input.childrenCount ?? r.children_count,
-        input.housing ?? r.housing,
-        input.housingName ?? r.housing_name ?? "",
-        input.healthNotes ?? r.health_notes ?? "",
-        input.hasMedicalNeeds !== undefined
-          ? input.hasMedicalNeeds
-            ? 1
-            : 0
-          : r.has_medical_needs,
-        input.notes !== undefined ? input.notes : r.notes,
-        updatedAt,
-        id,
-      );
-    return this.getFamily(id);
+  getFamily(organizationId: string, id: string): Family | null {
+    return this.familyService.getFamily(organizationId, id);
   }
 
-  deleteFamily(id: string): boolean {
-    const updatedAt = now();
-    const info = this.db
-      .prepare(
-        "UPDATE families SET archived = 1, updated_at = ? WHERE id = ? AND archived = 0",
-      )
-      .run(updatedAt, id);
-    return info.changes > 0;
+  createFamily(organizationId: string, input: CreateFamilyInput): Family {
+    return this.familyService.createFamily(organizationId, input);
   }
 
-  /**
-   * Supprime définitivement toutes les familles archivées (hard delete).
-   * Les enregistrements liés (enfants, besoins, aides, notes, documents...)
-   * sont supprimés automatiquement grâce aux contraintes ON DELETE CASCADE.
-   * Retourne le nombre de familles supprimées.
-   */
-  purgeArchivedFamilies(): number {
-    const info = this.db
-      .prepare("DELETE FROM families WHERE archived = 1")
-      .run();
-    return info.changes ?? 0;
+  updateFamily(
+    organizationId: string,
+    id: string,
+    input: Partial<CreateFamilyInput>,
+  ): Family | null {
+    return this.familyService.updateFamily(organizationId, id, input);
   }
 
-  /**
-   * Supprime définitivement TOUTES les familles (hard reset).
-   * Utiliser avec précaution : ceci efface aussi tous les enfants,
-   * besoins, aides, notes et documents associés via ON DELETE CASCADE.
-   * Les utilisateurs / comptes restent intacts.
-   */
-  resetAllFamilies(): number {
-    const info = this.db.prepare("DELETE FROM families").run();
-    return info.changes ?? 0;
+  deleteFamily(organizationId: string, id: string): boolean {
+    return this.familyService.deleteFamily(organizationId, id);
   }
 
-  searchFamilies(query: string): Family[] {
-    const q = "%" + query.toLowerCase().replace(/%/g, "\\%") + "%";
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM families WHERE archived = 0 AND (lower(responsible_name) LIKE ? OR lower(neighborhood) LIKE ? OR lower(housing_name) LIKE ? OR lower(address) LIKE ? OR phone LIKE ?)`,
-      )
-      .all(q, q, q, q, query) as FamilyRow[];
-    return rows.map(mapFamily);
+  purgeArchivedFamilies(organizationId: string): number {
+    return this.familyService.purgeArchivedFamilies(organizationId);
   }
 
-  searchGlobal(query: string): {
+  resetAllFamilies(organizationId: string): number {
+    return this.familyService.resetAllFamilies(organizationId);
+  }
+
+  searchFamilies(organizationId: string, query: string, limit?: number): Family[] {
+    return this.familyService.searchFamilies(organizationId, query, limit);
+  }
+
+  searchGlobal(organizationId: string, query: string, limit = 100): {
     families: Family[];
     needs: Need[];
     aids: Aid[];
@@ -816,8 +644,8 @@ class Storage {
     const q = query.trim().toLowerCase();
     if (!q) return { families: [], needs: [], aids: [] };
     
-    const categoryLabels = this.getCategoryLabels();
-    const families = this.searchFamilies(query);
+    const categoryLabels = this.getCategoryLabels(organizationId);
+    const families = this.searchFamilies(organizationId, query, limit);
     const like = `%${q.replace(/%/g, "\\%")}%`;
 
     // Trouver les IDs de catégories dont le nom correspond à la requête
@@ -847,8 +675,10 @@ class Storage {
     needParams.push(like, like);
 
     const needs = this.db
-      .prepare(`SELECT * FROM needs WHERE ${needConditions.join(" OR ")}`)
-      .all(...needParams) as NeedRow[];
+      .prepare(
+        `SELECT * FROM needs WHERE (${needConditions.join(" OR ")}) AND organization_id = ? ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(...needParams, organizationId, limit) as NeedRow[];
 
     // Construire les conditions de recherche pour aids
     const aidConditions: string[] = [];
@@ -872,8 +702,10 @@ class Storage {
     aidParams.push(like, like);
 
     const aids = this.db
-      .prepare(`SELECT * FROM aids WHERE ${aidConditions.join(" OR ")}`)
-      .all(...aidParams) as AidRow[];
+      .prepare(
+        `SELECT * FROM aids WHERE (${aidConditions.join(" OR ")}) AND organization_id = ? ORDER BY date DESC LIMIT ?`,
+      )
+      .all(...aidParams, organizationId, limit) as AidRow[];
 
     return {
       families,
@@ -957,6 +789,26 @@ class Storage {
       .prepare("SELECT * FROM needs ORDER BY created_at DESC")
       .all() as NeedRow[];
     return rows.map(mapNeed);
+  }
+
+  getNeedsPage(
+    organizationId: string,
+    opts: { limit: number; offset: number; familyId?: string },
+  ): { items: Need[]; total: number } {
+    const { limit, offset, familyId } = opts;
+    const baseSql = familyId
+      ? "FROM needs WHERE organization_id = ? AND family_id = ?"
+      : "FROM needs WHERE organization_id = ?";
+    const params = familyId ? [organizationId, familyId] : [organizationId];
+    const countRow = this.db
+      .prepare(`SELECT COUNT(*) as c ${baseSql}`)
+      .get(...params) as { c: number };
+    const rows = this.db
+      .prepare(
+        `SELECT * ${baseSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      )
+      .all(...params, limit, offset) as NeedRow[];
+    return { total: countRow.c, items: rows.map(mapNeed) };
   }
 
   getNeedsByFamily(familyId: string): Need[] {
@@ -1043,6 +895,26 @@ class Storage {
       .prepare("SELECT * FROM aids ORDER BY date DESC")
       .all() as AidRow[];
     return rows.map(mapAid);
+  }
+
+  getAidsPage(
+    organizationId: string,
+    opts: { limit: number; offset: number; familyId?: string },
+  ): { items: Aid[]; total: number } {
+    const { limit, offset, familyId } = opts;
+    const baseSql = familyId
+      ? "FROM aids WHERE organization_id = ? AND family_id = ?"
+      : "FROM aids WHERE organization_id = ?";
+    const params = familyId ? [organizationId, familyId] : [organizationId];
+    const countRow = this.db
+      .prepare(`SELECT COUNT(*) as c ${baseSql}`)
+      .get(...params) as { c: number };
+    const rows = this.db
+      .prepare(
+        `SELECT * ${baseSql} ORDER BY date DESC LIMIT ? OFFSET ?`,
+      )
+      .all(...params, limit, offset) as AidRow[];
+    return { total: countRow.c, items: rows.map(mapAid) };
   }
 
   getAidsByFamily(familyId: string): Aid[] {
@@ -1229,7 +1101,7 @@ class Storage {
 
   // ==================== DASHBOARD ====================
 
-  getDashboardStats(): DashboardStats {
+  getDashboardStats(organizationId: string): DashboardStats {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const startOfMonth = new Date();
@@ -1237,57 +1109,62 @@ class Storage {
     startOfMonth.setHours(0, 0, 0, 0);
     const totalFamilies = (
       this.db
-        .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0")
-        .get() as {
-        c: number;
-      }
+        .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0 AND organization_id = ?")
+        .get(organizationId) as { c: number }
     ).c;
     const urgentNeeds = (
       this.db
         .prepare(
-          "SELECT COUNT(*) as c FROM needs WHERE urgency = 'high' AND status != 'covered'",
+          "SELECT COUNT(*) as c FROM needs WHERE organization_id = ? AND urgency = 'high' AND status != 'covered'",
         )
-        .get() as { c: number }
+        .get(organizationId) as { c: number }
     ).c;
     const aidsThisMonth = (
       this.db
-        .prepare("SELECT COUNT(*) as c FROM aids WHERE date >= ?")
-        .get(startOfMonth.toISOString()) as { c: number }
+        .prepare("SELECT COUNT(*) as c FROM aids WHERE organization_id = ? AND date >= ?")
+        .get(organizationId, startOfMonth.toISOString()) as { c: number }
     ).c;
     const familiesNotVisited = (
       this.db
         .prepare(
-          "SELECT COUNT(*) as c FROM families WHERE archived = 0 AND (last_visit_at IS NULL OR last_visit_at < ?)",
+          "SELECT COUNT(*) as c FROM families WHERE archived = 0 AND organization_id = ? AND (last_visit_at IS NULL OR last_visit_at < ?)",
         )
-        .get(thirtyDaysAgo.toISOString()) as { c: number }
+        .get(organizationId, thirtyDaysAgo.toISOString()) as { c: number }
     ).c;
     const medicalFamilies = (
       this.db
         .prepare(
-          "SELECT COUNT(*) as c FROM families WHERE has_medical_needs = 1 AND archived = 0",
+          "SELECT COUNT(*) as c FROM families WHERE organization_id = ? AND has_medical_needs = 1 AND archived = 0",
         )
-        .get() as { c: number }
+        .get(organizationId) as { c: number }
     ).c;
     const recentAidsRows = this.db
-      .prepare("SELECT * FROM aids ORDER BY date DESC LIMIT 5")
-      .all() as AidRow[];
-    const recentAids = recentAidsRows.map((a) => {
-      const fam = this.getFamily(a.family_id);
-      return { 
-        ...mapAid(a), 
-        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu" 
-      };
-    });
+      .prepare("SELECT * FROM aids WHERE organization_id = ? ORDER BY date DESC LIMIT 5")
+      .all(organizationId) as AidRow[];
     const urgentNeedsRows = this.db
       .prepare(
-        "SELECT * FROM needs WHERE urgency = 'high' AND status != 'covered' ORDER BY created_at DESC LIMIT 5",
+        "SELECT * FROM needs WHERE organization_id = ? AND urgency = 'high' AND status != 'covered' ORDER BY created_at DESC LIMIT 5",
       )
-      .all() as NeedRow[];
+      .all(organizationId) as NeedRow[];
+    const familyIds = [...new Set([
+      ...recentAidsRows.map((a) => a.family_id),
+      ...urgentNeedsRows.map((n) => n.family_id),
+    ])];
+    const familyMap = Object.fromEntries(
+      this.familyService.getFamiliesByIds(organizationId, familyIds).map((f) => [f.id, f]),
+    );
+    const recentAids = recentAidsRows.map((a) => {
+      const fam = familyMap[a.family_id];
+      return {
+        ...mapAid(a),
+        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu",
+      };
+    });
     const urgentNeedsList = urgentNeedsRows.map((n) => {
-      const fam = this.getFamily(n.family_id);
-      return { 
-        ...mapNeed(n), 
-        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu" 
+      const fam = familyMap[n.family_id];
+      return {
+        ...mapNeed(n),
+        familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu",
       };
     });
     return {
@@ -1303,16 +1180,16 @@ class Storage {
 
   // ==================== EXPORT ====================
 
-  getExportData(opts?: { limit?: number; offset?: number }) {
+  getExportData(organizationId: string, opts?: { limit?: number; offset?: number }) {
     const limit = opts?.limit ?? 200;
     const offset = opts?.offset ?? 0;
 
     const familiesRows = this.db
       .prepare(
-        "SELECT * FROM families WHERE archived = 0 ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+        "SELECT * FROM families WHERE archived = 0 AND organization_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
       )
-      .all(limit, offset) as FamilyRow[];
-    const families = familiesRows.map(mapFamily);
+      .all(organizationId, limit, offset) as FamilyRow[];
+    const families = familiesRows.map(mapFamilyRow);
 
     const familiesWithRelations = families.map((f) => ({
       ...f,
@@ -1322,12 +1199,12 @@ class Storage {
     }));
 
     const totalFamiliesRow = this.db
-      .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0")
-      .get() as { c: number };
+      .prepare("SELECT COUNT(*) as c FROM families WHERE archived = 0 AND organization_id = ?")
+      .get(organizationId) as { c: number };
 
     return {
       families: familiesWithRelations,
-      stats: this.getDashboardStats(),
+      stats: this.getDashboardStats(organizationId),
       pagination: {
         limit,
         offset,
@@ -1338,22 +1215,26 @@ class Storage {
 
   // ==================== AUDIT LOG ====================
 
-  appendAuditLog(entry: {
-    userId: string;
-    userName: string;
-    action: "created" | "updated" | "deleted";
-    entityType: AuditLog["entityType"];
-    entityId: string;
-    details?: string;
-  }): AuditLog {
+  appendAuditLog(
+    organizationId: string,
+    entry: {
+      userId: string;
+      userName: string;
+      action: "created" | "updated" | "deleted";
+      entityType: AuditLog["entityType"];
+      entityId: string;
+      details?: string;
+    },
+  ): AuditLog {
     const id = "audit-" + generateId();
     const createdAt = now();
     this.db
       .prepare(
-        "INSERT INTO audit_logs (id, user_id, user_name, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO audit_logs (id, organization_id, user_id, user_name, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         id,
+        organizationId,
         entry.userId,
         entry.userName,
         entry.action,
@@ -1362,18 +1243,6 @@ class Storage {
         entry.details ?? null,
         createdAt,
       );
-    const count = (
-      this.db.prepare("SELECT COUNT(*) as c FROM audit_logs").get() as {
-        c: number;
-      }
-    ).c;
-    if (count > 500) {
-      const oldest = this.db
-        .prepare("SELECT id FROM audit_logs ORDER BY created_at ASC LIMIT 1")
-        .get() as { id: string } | undefined;
-      if (oldest)
-        this.db.prepare("DELETE FROM audit_logs WHERE id = ?").run(oldest.id);
-    }
     return mapAuditLog({
       id,
       user_id: entry.userId,
@@ -1386,11 +1255,25 @@ class Storage {
     });
   }
 
-  getAuditLogs(limit = 100): AuditLog[] {
+  getAuditLogs(organizationId: string, limit = 100): AuditLog[] {
     const rows = this.db
-      .prepare("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?")
-      .all(limit) as AuditLogRow[];
+      .prepare(
+        "SELECT * FROM audit_logs WHERE organization_id = ? ORDER BY created_at DESC LIMIT ?",
+      )
+      .all(organizationId, limit) as AuditLogRow[];
     return rows.map(mapAuditLog);
+  }
+
+  pruneAuditLogsOlderThan(organizationId: string, retentionDays: number): number {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+    const cutoffIso = cutoff.toISOString();
+    const info = this.db
+      .prepare(
+        "DELETE FROM audit_logs WHERE organization_id = ? AND created_at < ?",
+      )
+      .run(organizationId, cutoffIso);
+    return info.changes ?? 0;
   }
 
   // ==================== FAMILY DOCUMENTS ====================

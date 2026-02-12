@@ -17,6 +17,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingValidation, setPendingValidation] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +36,13 @@ export default function Register() {
     const result = await register({ name, email, password });
     setIsLoading(false);
 
+    if (result.success && result.pending) {
+      setError("");
+      setPassword("");
+      setConfirmPassword("");
+      setPendingValidation(true);
+      return;
+    }
     if (result.success) {
       navigate(ROUTES.dashboard);
     } else {
@@ -62,12 +70,29 @@ export default function Register() {
             Inscription
           </h2>
 
+          {pendingValidation && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-4 rounded-lg mb-4 text-sm">
+              <p className="font-medium">Compte créé</p>
+              <p className="mt-1">
+                Votre compte est en attente de validation par un administrateur.
+                Vous pourrez vous connecter une fois qu’il aura été activé.
+              </p>
+              <Link
+                to={ROUTES.login}
+                className="mt-3 inline-block text-primary font-medium hover:underline"
+              >
+                Retour à la connexion
+              </Link>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
               {error}
             </div>
           )}
 
+          {!pendingValidation && (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="name">Nom</Label>
@@ -110,6 +135,7 @@ export default function Register() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -152,6 +178,7 @@ export default function Register() {
               )}
             </Button>
           </form>
+          )}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Vous avez déjà un compte ?{" "}

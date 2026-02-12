@@ -96,10 +96,11 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
   const duplicateStrategy =
     payload.duplicateStrategy === "update" ? "update" : "skip";
 
-  // On travaille en mode "meilleur effort" sans transaction globale :
-  // chaque ligne est traitée individuellement, les erreurs sont collectées
-  // mais n'annulent pas les autres lignes.
-  const existing = storage.getAllFamilies();
+  const actor = (res as any).locals
+    ?.user as { id: string; name: string; organizationId?: string } | undefined;
+  const orgId = actor?.organizationId ?? "org-default";
+
+  const existing = storage.getAllFamilies(orgId);
   const existingByPhone = new Map(
     existing
       .filter((f) => f.phone)
@@ -114,9 +115,6 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
     createdFamilies: [] as { row: number; familyNumber: number; id: string }[],
     updatedFamilies: [] as { row: number; familyNumber: number; id: string }[],
   };
-
-  const actor = (res as any).locals
-    ?.user as { id: string; name: string } | undefined;
 
   payload.rows.forEach((raw, idx) => {
     const normalized = normalizeRow(raw);
@@ -140,7 +138,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
 
       let updated = null;
       try {
-        updated = storage.updateFamily(existingFamily.id, parsed.data);
+        updated = storage.updateFamily(orgId, existingFamily.id, parsed.data);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         result.errors.push({
@@ -158,7 +156,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
           id: updated.id,
         });
         if (actor) {
-          storage.appendAuditLog({
+          storage.appendAuditLog(actor.organizationId ?? "org-default", {
             userId: actor.id,
             userName: actor.name,
             action: "updated",
@@ -211,7 +209,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
         })
       | null = null;
     try {
-      const fam = storage.createFamily(parsed.data);
+      const fam = storage.createFamily(orgId, parsed.data);
       created = fam as any;
       result.created += 1;
       result.createdFamilies.push({
@@ -232,7 +230,7 @@ export const handleImportFamilies: RequestHandler = (req, res) => {
       existingByPhone.set(phoneKey, created);
     }
     if (created && actor) {
-      storage.appendAuditLog({
+      storage.appendAuditLog(actor.organizationId ?? "org-default", {
         userId: actor.id,
         userName: actor.name,
         action: "created",

@@ -7,16 +7,21 @@ function createTestDb(): Database.Database {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
-  // Créer les tables
+  const now = new Date().toISOString();
   db.exec(`
+    CREATE TABLE organizations (id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL, created_at TEXT NOT NULL);
+    INSERT INTO organizations (id, name, slug, created_at) VALUES ('org-default', 'Default', 'default', '${now}');
     CREATE TABLE categories (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      organization_id TEXT DEFAULT 'org-default'
     );
     CREATE TABLE families (
       id TEXT PRIMARY KEY,
+      organization_id TEXT DEFAULT 'org-default',
+      number INTEGER,
       responsible_name TEXT NOT NULL,
       phone TEXT NOT NULL,
       address TEXT NOT NULL,
@@ -30,7 +35,8 @@ function createTestDb(): Database.Database {
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      last_visit_at TEXT
+      last_visit_at TEXT,
+      archived INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE needs (
       id TEXT PRIMARY KEY,
@@ -41,7 +47,8 @@ function createTestDb(): Database.Database {
       comment TEXT NOT NULL DEFAULT '',
       details TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      organization_id TEXT DEFAULT 'org-default'
     );
     CREATE TABLE aids (
       id TEXT PRIMARY KEY,
@@ -55,7 +62,8 @@ function createTestDb(): Database.Database {
       source TEXT NOT NULL,
       notes TEXT NOT NULL DEFAULT '',
       proof_url TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      organization_id TEXT DEFAULT 'org-default'
     );
   `);
 
@@ -84,7 +92,7 @@ describe("Storage.searchGlobal", () => {
   });
 
   it("devrait retourner des résultats vides pour une requête vide", () => {
-    const result = storage.searchGlobal("");
+    const result = storage.searchGlobal("org-default", "");
     expect(result.families).toEqual([]);
     expect(result.needs).toEqual([]);
     expect(result.aids).toEqual([]);
@@ -127,7 +135,7 @@ describe("Storage.searchGlobal", () => {
       now,
     );
 
-    const result = storage.searchGlobal("urgent");
+    const result = storage.searchGlobal("org-default", "urgent");
     expect(result.needs).toHaveLength(1);
     expect(result.needs[0].id).toBe("need-1");
     expect(result.needs[0].comment).toContain("urgent");
@@ -168,7 +176,7 @@ describe("Storage.searchGlobal", () => {
       now,
     );
 
-    const result = storage.searchGlobal("vêtements");
+    const result = storage.searchGlobal("org-default", "vêtements");
     expect(result.needs).toHaveLength(1);
     expect(result.needs[0].details).toContain("vêtements");
   });
@@ -210,7 +218,7 @@ describe("Storage.searchGlobal", () => {
     );
 
     // Rechercher par le label de catégorie
-    const result = storage.searchGlobal("Nourriture");
+    const result = storage.searchGlobal("org-default", "Nourriture");
     expect(result.needs).toHaveLength(1);
     expect(result.needs[0].type).toBe("cat-food");
   });
@@ -254,7 +262,7 @@ describe("Storage.searchGlobal", () => {
       now,
     );
 
-    const result = storage.searchGlobal("Jean");
+    const result = storage.searchGlobal("org-default", "Jean");
     expect(result.aids).toHaveLength(1);
     expect(result.aids[0].volunteerName).toContain("Jean");
   });
@@ -298,7 +306,7 @@ describe("Storage.searchGlobal", () => {
       now,
     );
 
-    const result = storage.searchGlobal("Livraison");
+    const result = storage.searchGlobal("org-default", "Livraison");
     expect(result.aids).toHaveLength(1);
     expect(result.aids[0].notes).toContain("Livraison");
   });
@@ -344,7 +352,7 @@ describe("Storage.searchGlobal", () => {
     );
 
     // Rechercher par le label de catégorie
-    const result = storage.searchGlobal("médicale");
+    const result = storage.searchGlobal("org-default", "médicale");
     expect(result.aids).toHaveLength(1);
     expect(result.aids[0].type).toBe("cat-medical");
   });
@@ -405,7 +413,7 @@ describe("Storage.searchGlobal", () => {
     );
 
     // Rechercher par le nom de la famille
-    const result = storage.searchGlobal("Garcia");
+    const result = storage.searchGlobal("org-default", "Garcia");
     expect(result.families).toHaveLength(1);
     expect(result.families[0].responsibleName).toBe("Garcia");
     // Les besoins et aides de cette famille devraient être trouvés
@@ -486,7 +494,7 @@ describe("Storage.searchGlobal", () => {
     );
 
     // Rechercher "Nourriture" devrait trouver les deux besoins
-    const result = storage.searchGlobal("Nourriture");
+    const result = storage.searchGlobal("org-default", "Nourriture");
     expect(result.needs.length).toBeGreaterThanOrEqual(2);
     // Au moins un devrait être trouvé par catégorie, l'autre par commentaire
     const foundByCategory = result.needs.some((n) => n.type === "cat-food");

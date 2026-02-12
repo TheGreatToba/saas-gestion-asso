@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+// ============ ORGANIZATIONS (multi-tenant) ============
+
+export const OrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  createdAt: z.string(),
+});
+export type Organization = z.infer<typeof OrganizationSchema>;
+
 // ============ USERS & AUTH ============
 
 export const UserRole = z.enum(["admin", "volunteer"]);
@@ -11,6 +21,7 @@ export const UserSchema = z.object({
   email: z.string().email(),
   role: UserRole,
   active: z.boolean().default(true),
+  organizationId: z.string(),
 });
 export type User = z.infer<typeof UserSchema>;
 

@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { CreateUserInput, UpdateUserInput, User as UserType } from "@shared/schema";
 
 const emptyForm: CreateUserInput = {
@@ -40,6 +41,7 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [deleteUser, setDeleteUser] = useState<UserType | null>(null);
   const [form, setForm] = useState<CreateUserInput>(emptyForm);
   const [password, setPassword] = useState("");
 
@@ -153,6 +155,15 @@ export default function Users() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+      <ConfirmDialog
+        open={!!deleteUser}
+        onOpenChange={(open) => !open && setDeleteUser(null)}
+        title="Supprimer ce compte ?"
+        description={deleteUser ? `Supprimer définitivement le compte de ${deleteUser.name} ? Cette action est irréversible.` : ""}
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteUser && deleteMutation.mutate(deleteUser.id)}
+      />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
@@ -262,15 +273,7 @@ export default function Users() {
                         variant="outline"
                         size="sm"
                         className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Supprimer définitivement le compte de ${u.name} ? Cette action est irréversible.`
-                            )
-                          ) {
-                            deleteMutation.mutate(u.id);
-                          }
-                        }}
+                        onClick={() => setDeleteUser(u)}
                         disabled={deleteMutation.isPending}
                         title="Supprimer le compte bénévole"
                       >

@@ -58,6 +58,7 @@ import { statusBadgeClasses, urgencyBadgeClasses, priorityBadgeClasses } from "@
 import { toast } from "@/components/ui/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function FamilyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +72,9 @@ export default function FamilyDetail() {
   const [addAidPrefillNotes, setAddAidPrefillNotes] = useState("");
   const [showAddNote, setShowAddNote] = useState(false);
   const [showAddDocument, setShowAddDocument] = useState(false);
+  const [deleteChildId, setDeleteChildId] = useState<string | null>(null);
+  const [deleteAidId, setDeleteAidId] = useState<string | null>(null);
+  const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
 
   const { data: family, isLoading: familyLoading, error: familyError } = useQuery({
     queryKey: ["family", id],
@@ -291,7 +295,33 @@ export default function FamilyDetail() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-
+      <ConfirmDialog
+        open={!!deleteChildId}
+        onOpenChange={(open) => !open && setDeleteChildId(null)}
+        title="Supprimer cet enfant ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteChildId && deleteChildMutation.mutate(deleteChildId)}
+      />
+      <ConfirmDialog
+        open={!!deleteAidId}
+        onOpenChange={(open) => !open && setDeleteAidId(null)}
+        title="Supprimer cette aide ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteAidId && deleteAidMutation.mutate(deleteAidId)}
+      />
+      <ConfirmDialog
+        open={!!deleteDocId}
+        onOpenChange={(open) => !open && setDeleteDocId(null)}
+        title="Supprimer ce document ?"
+        description="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        variant="destructive"
+        onConfirm={() => deleteDocId && deleteDocumentMutation.mutate(deleteDocId)}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {(familyError || childrenError || needsError || aidsError || notesError || documentsError) && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-6">
@@ -530,11 +560,7 @@ export default function FamilyDetail() {
                           variant="ghost"
                           size="sm"
                           className="text-red-600"
-                          onClick={() => {
-                            if (confirm("Supprimer cet enfant ?")) {
-                              deleteChildMutation.mutate(child.id);
-                            }
-                          }}
+                          onClick={() => setDeleteChildId(child.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -668,15 +694,7 @@ export default function FamilyDetail() {
                               variant="ghost"
                               size="icon"
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => {
-                                if (
-                                  confirm(
-                                    "Supprimer cette aide ? Cette action est irréversible.",
-                                  )
-                                ) {
-                                  deleteAidMutation.mutate(aid.id);
-                                }
-                              }}
+                              onClick={() => setDeleteAidId(aid.id)}
                               aria-label="Supprimer l'aide"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -828,11 +846,7 @@ export default function FamilyDetail() {
                           variant="ghost"
                           size="sm"
                           className="text-red-600 shrink-0"
-                          onClick={() => {
-                            if (confirm("Supprimer ce document ?")) {
-                              deleteDocumentMutation.mutate(doc.id);
-                            }
-                          }}
+                          onClick={() => setDeleteDocId(doc.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
