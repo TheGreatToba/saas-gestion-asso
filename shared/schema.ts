@@ -113,7 +113,7 @@ export const FamilySchema = z.object({
   phone: z.string(),
   address: z.string(),
   neighborhood: z.string(),
-  memberCount: z.number().int().min(1, "Min 1 membre"),
+  memberCount: z.number().int().min(0, "Nombre de membres invalide"),
   childrenCount: z.number().int().min(0),
   housing: FamilyHousing,
   housingName: z.string().optional().default(""),

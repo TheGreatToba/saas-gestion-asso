@@ -8,7 +8,34 @@ interface Bucket {
   blockedUntil?: number;
 }
 
-const buckets = new Map<Key, Bucket>();
+/**
+ * Store interface for rate limit state. Allows swapping in-memory store for
+ * Redis (RATE_LIMIT_REDIS_URL) when scaling horizontally.
+ */
+export interface RateLimitStore {
+  get(key: Key): Bucket | undefined;
+  set(key: Key, bucket: Bucket): void;
+}
+
+const inMemoryBuckets = new Map<Key, Bucket>();
+
+const inMemoryStore: RateLimitStore = {
+  get: (key) => inMemoryBuckets.get(key),
+  set: (key, bucket) => {
+    inMemoryBuckets.set(key, bucket);
+  },
+};
+
+/** Used by createRateLimiter. Set via setRateLimitStore() when using Redis. */
+let store: RateLimitStore = inMemoryStore;
+
+export function setRateLimitStore(s: RateLimitStore): void {
+  store = s;
+}
+
+export function getRateLimitStore(): RateLimitStore {
+  return store;
+}
 
 const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_ATTEMPTS = 10; // max attempts per window
@@ -16,11 +43,8 @@ const BLOCK_MS = 15 * 60 * 1000; // 15 minutes lockout after abuse
 
 /**
  * Basic in-memory rate limiter configuration.
- *
- * NOTE: This implementation is intentionally simple and process-local.
- * For horizontal scaling, the storage logic behind this function should be
- * replaced by a shared backend (e.g. Redis) while keeping the public
- * middleware API unchanged.
+ * For horizontal scaling, use setRateLimitStore() with a Redis-backed store
+ * when RATE_LIMIT_REDIS_URL is set (see .env.example).
  */
 export interface RateLimitOptions {
   /**
@@ -70,7 +94,7 @@ export const createRateLimiter = (options: RateLimitOptions): RequestHandler => 
     const keyBase = keyFromRequest?.(req) ?? getClientIp(req);
     const key = `${name}:${keyBase}`;
     const now = Date.now();
-    const bucket = buckets.get(key);
+    const bucket = store.get(key);
 
     if (bucket?.blockedUntil && bucket.blockedUntil > now) {
       // Basic logging to help monitor abusive sources and attacks.
@@ -87,14 +111,16 @@ export const createRateLimiter = (options: RateLimitOptions): RequestHandler => 
     }
 
     if (!bucket || now - bucket.firstAttemptAt > windowMs) {
-      buckets.set(key, { count: 1, firstAttemptAt: now });
+      store.set(key, { count: 1, firstAttemptAt: now });
       return next();
     }
 
     bucket.count += 1;
+    store.set(key, bucket);
 
     if (bucket.count > maxAttempts) {
       bucket.blockedUntil = now + blockMs;
+      store.set(key, bucket);
 
       console.warn(
         `[rate-limit] key="${key}" blocked for ${blockMs}ms after ${bucket.count} attempts in ${windowMs}ms window`,

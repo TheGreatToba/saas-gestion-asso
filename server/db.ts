@@ -137,8 +137,8 @@ function runMigrations(database: Database.Database): void {
       family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       document_type TEXT NOT NULL,
-      -- Données brutes (base64) historique, non utilisées pour les nouveaux uploads.
-      file_data TEXT NOT NULL,
+      -- Données brutes (base64) legacy ; nouveaux uploads utilisent file_key, donc NULL accepté.
+      file_data TEXT,
       mime_type TEXT NOT NULL,
       uploaded_at TEXT NOT NULL,
       uploaded_by TEXT NOT NULL,
@@ -213,6 +213,35 @@ function runMigrations(database: Database.Database): void {
   );
   if (!hasFileKey) {
     database.exec("ALTER TABLE family_documents ADD COLUMN file_key TEXT;");
+  }
+
+  // Migration: file_data nullable (nouveaux uploads utilisent file_key, plus de BLOB en base).
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER NOT NULL PRIMARY KEY);
+    INSERT OR IGNORE INTO _schema_version (version) VALUES (0);
+  `);
+  const versionRow = database.prepare("SELECT version FROM _schema_version").get() as { version: number } | undefined;
+  const schemaVersion = versionRow?.version ?? 0;
+  if (schemaVersion < 1) {
+    database.exec(`
+      CREATE TABLE family_documents_new (
+        id TEXT PRIMARY KEY,
+        family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        document_type TEXT NOT NULL,
+        file_data TEXT,
+        mime_type TEXT NOT NULL,
+        uploaded_at TEXT NOT NULL,
+        uploaded_by TEXT NOT NULL,
+        uploaded_by_name TEXT NOT NULL,
+        file_key TEXT
+      );
+      INSERT INTO family_documents_new SELECT id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name, file_key FROM family_documents;
+      DROP TABLE family_documents;
+      ALTER TABLE family_documents_new RENAME TO family_documents;
+      CREATE INDEX IF NOT EXISTS idx_family_documents_family ON family_documents(family_id);
+    `);
+    database.prepare("UPDATE _schema_version SET version = 1").run();
   }
 
   // Multi-tenant: organization_id on all tenant-scoped tables

@@ -723,6 +723,24 @@ class Storage {
     return rows.map(mapChild);
   }
 
+  /** Batch load children by family ids (avoids N+1 in export). */
+  getChildrenByFamilyIds(familyIds: string[]): Map<string, Child[]> {
+    const map = new Map<string, Child[]>();
+    if (familyIds.length === 0) return map;
+    const placeholders = familyIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM children WHERE family_id IN (${placeholders}) ORDER BY family_id, created_at`,
+      )
+      .all(...familyIds) as ChildRow[];
+    for (const r of rows) {
+      const list = map.get(r.family_id) ?? [];
+      list.push(mapChild(r));
+      map.set(r.family_id, list);
+    }
+    return map;
+  }
+
   createChild(input: CreateChildInput): Child {
     const id = "ch-" + generateId();
     const createdAt = now();
@@ -818,6 +836,24 @@ class Storage {
       )
       .all(familyId) as NeedRow[];
     return rows.map(mapNeed);
+  }
+
+  /** Batch load needs by family ids (avoids N+1 in export). */
+  getNeedsByFamilyIds(familyIds: string[]): Map<string, Need[]> {
+    const map = new Map<string, Need[]>();
+    if (familyIds.length === 0) return map;
+    const placeholders = familyIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM needs WHERE family_id IN (${placeholders}) ORDER BY family_id, created_at DESC`,
+      )
+      .all(...familyIds) as NeedRow[];
+    for (const r of rows) {
+      const list = map.get(r.family_id) ?? [];
+      list.push(mapNeed(r));
+      map.set(r.family_id, list);
+    }
+    return map;
   }
 
   createNeed(input: CreateNeedInput): Need {
@@ -922,6 +958,24 @@ class Storage {
       .prepare("SELECT * FROM aids WHERE family_id = ? ORDER BY date DESC")
       .all(familyId) as AidRow[];
     return rows.map(mapAid);
+  }
+
+  /** Batch load aids by family ids (avoids N+1 in export). */
+  getAidsByFamilyIds(familyIds: string[]): Map<string, Aid[]> {
+    const map = new Map<string, Aid[]>();
+    if (familyIds.length === 0) return map;
+    const placeholders = familyIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM aids WHERE family_id IN (${placeholders}) ORDER BY family_id, date DESC`,
+      )
+      .all(...familyIds) as AidRow[];
+    for (const r of rows) {
+      const list = map.get(r.family_id) ?? [];
+      list.push(mapAid(r));
+      map.set(r.family_id, list);
+    }
+    return map;
   }
 
   createAid(input: CreateAidStorageInput): Aid {
@@ -1190,12 +1244,16 @@ class Storage {
       )
       .all(organizationId, limit, offset) as FamilyRow[];
     const families = familiesRows.map(mapFamilyRow);
+    const familyIds = families.map((f) => f.id);
+    const childrenByFamily = this.getChildrenByFamilyIds(familyIds);
+    const needsByFamily = this.getNeedsByFamilyIds(familyIds);
+    const aidsByFamily = this.getAidsByFamilyIds(familyIds);
 
     const familiesWithRelations = families.map((f) => ({
       ...f,
-      children: this.getChildrenByFamily(f.id),
-      needs: this.getNeedsByFamily(f.id),
-      aids: this.getAidsByFamily(f.id),
+      children: childrenByFamily.get(f.id) ?? [],
+      needs: needsByFamily.get(f.id) ?? [],
+      aids: aidsByFamily.get(f.id) ?? [],
     }));
 
     const totalFamiliesRow = this.db
@@ -1330,13 +1388,14 @@ class Storage {
     const uploadedAt = now();
     this.db
       .prepare(
-        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name, file_key) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?)",
+        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name, file_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         id,
         input.familyId,
         input.name,
         input.documentType,
+        null, // stockage objet via file_key, plus de BLOB en base
         input.mimeType,
         uploadedAt,
         input.uploadedBy,
@@ -1348,7 +1407,7 @@ class Storage {
       family_id: input.familyId,
       name: input.name,
       document_type: input.documentType,
-      file_data: "",
+      file_data: null,
       mime_type: input.mimeType,
       uploaded_at: uploadedAt,
       uploaded_by: input.uploadedBy,
