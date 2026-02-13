@@ -1,0 +1,211 @@
+1️⃣ Analyse Produit
+Proposition de valeur (bonne, mais incomplète pour un vrai SaaS B2B)
+Le cœur métier est cohérent avec une association d’aide post-inondation : familles, besoins, aides, notes de visite, stock, documents, reporting. On le voit dans le routing applicatif (Dashboard, Familles, Besoins, Aides, Stock, Reports, Users).
+Le problème : c’est encore un produit “opérations internes” plus quun SaaS B2B industrialisé (pas de notion d’organisation/tenant dans les rôles, schéma et APIs).
+
+Cohérence fonctionnelle
+La chaîne métier “famille → besoins → aides → suivi” existe et est exploitable.
+
+Le scoring de priorité des besoins est une bonne idée produit (urgence + ancienneté + dernière visite).
+
+Manques critiques
+Pas de multi-association (pas d’organization_id, pas d’isolation des données).
+
+Pas de workflow d’intervention (affectation d’une mission à un bénévole, statuts d’intervention, ETA terrain, checklists).
+
+Pas de SLA opérationnel (temps moyen de prise en charge, backlog par zone, délais critiques).
+
+Pas de gouvernance fine des droits (2 rôles seulement).
+
+Risques produit majeurs
+Produit difficilement vendable en B2B “mutualisé” sans isolation tenant.
+
+Forte dépendance à des admins “super-users” car peu de granularité d’accès.
+
+Données sensibles (familles, santé, documents) sans cadre de conformité explicite.
+
+Recommandations stratégiques
+Passer en RBAC/ABAC: admin association, coordinateur terrain, bénévole, auditeur.
+
+Ajouter un module interventions (planning + affectation + géo + statut).
+
+Introduire un mode multi-tenant strict avant tout scale commercial.
+
+2️⃣ Analyse UX / UI
+Parcours utilisateur
+Le parcours principal est compréhensible, mais les écrans sont très denses et la charge cognitive élevée pour des bénévoles peu techniques (ex. pages très longues).
+
+Frictions UX
+Beaucoup d’actions destructives via confirm() navigateur (expérience pauvre + risque d’erreur).
+
+Recherche globale utile, mais overlays/menus complexes (desktop + mobile + états multiples).
+
+Accessibilité (point faible)
+Boutons icônes de visibilité mot de passe sans aria-label explicite.
+
+Nombreux textes en text-xs et densité élevée (lisibilité terrain potentiellement dégradée).
+
+Mobile
+Il y a des adaptations (md:hidden, grid-cols-*), mais la complexité reste élevée pour usage terrain rapide.
+Ex: pages massives (FamilyDetail, Reports) peu “task-first”.
+
+Recommandations UX concrètes
+Mode “Intervention rapide” mobile (3 actions max : trouver famille, enregistrer aide, ajouter note).
+
+Remplacer confirm() par dialogs explicites avec contexte.
+
+Introduire un design “low-friction” pour profils non techniques (typo + contrastes + CTA hiérarchisés).
+
+3️⃣ Architecture Technique
+Qualité globale
+Le projet est fonctionnel, typé, avec séparation client/server/shared.
+Mais la dette de structure est forte (fichiers très volumineux, logique métier concentrée dans storage.ts).
+
+Signaux de dette
+server/storage.ts centralise énormément de responsabilités (auth, CRUD, stats, export, audit, docs).
+
+Pages front très longues (jusqu’à 1271 lignes).
+
+Patterns ad hoc (ex: génération URL signée avec contournements any).
+
+Couplage excessif
+Routes → storage monolithique → SQL inline.
+La couche domaine est peu explicite (peu de services métier séparés).
+
+Refactor prioritaires
+Découper storage.ts par agrégat (families.repository.ts, needs.repository.ts, etc.).
+
+Introduire une couche service métier (workflows, règles d’autorisation).
+
+Extraire DTOs/validators dédiés par route.
+
+4️⃣ Performance & Scalabilité
+Goulots potentiels
+Endpoints non paginés (getAllNeeds, getAllAids, getAllFamilies côté routes).
+
+Recherche globale sans limite server-side, conditions OR dynamiques, enrichissements additionnels.
+
+N+1 et surcoûts
+Dashboard: pour chaque aide/besoin récent, appel getFamily individuel.
+
+Export: pour chaque famille, 3 lectures relationnelles (children, needs, aids).
+
+Scalabilité multi-association
+Non adaptée en l’état (schéma sans tenant key).
+
+Optimisations
+Pagination obligatoire sur listes + filtres indexés.
+
+Jointures SQL ciblées pour dashboard/export.
+
+Cache court TTL sur stats et catégories.
+
+5️⃣ Sécurité
+Vulnérabilités / patterns dangereux
+Token renvoyé en JSON + stocké localStorage → surface XSS plus critique.
+
+réponse login contient token
+
+token écrit en localStorage
+
+token réinjecté en Authorization header
+
+Inscription publique active immédiate (pas d’approbation admin / vérification email).
+
+Rate limit en mémoire locale non distribué (inefficace en scaling horizontal).
+
+Antivirus documentaire non implémenté (hook vide).
+
+Contrôles positifs existants
+Cookie HttpOnly + SameSite pour auth principale.
+
+Validation Zod sur plusieurs payloads routes.
+
+Auth middleware + admin middleware globalement présents.
+
+Recommandations sécurité prioritaires
+Supprimer token côté client (cookie-only + CSRF token).
+
+Ajouter vérification email / invitation admin pour création de compte.
+
+WAF/rate limit Redis centralisé.
+
+Antivirus réel + contrôle type MIME et magic bytes.
+
+Journal d’audit non tronqué à 500 entrées en production critique (ou externalisé SIEM).
+
+6️⃣ Modèle de Données
+Cohérence
+Le modèle couvre bien le métier associatif de base (familles, besoins, aides, notes, documents).
+
+Incohérences notables
+FamilySchema.memberCount min=1 vs CreateFamilySchema.memberCount min=0 et DB check >=0 → règle métier floue.
+
+Colonne families.number non contrainte unique en DB (risque de collision logique à terme).
+
+family_documents.file_data encore NOT NULL alors que nouveau flux passe par objet externe file_key (legacy résiduel).
+
+Améliorations structurelles
+Ajouter organization_id partout (PK composées/logiques d’isolation).
+
+Contraintes d’unicité métier (organization_id + number, téléphone normalisé).
+
+Historisation structurée (event log) pour opérations sensibles.
+
+7️⃣ Maintenabilité & Évolutivité
+Typage
+Plutôt bon via TypeScript + Zod + schéma partagé.
+Mais présence de any et contournements diminue la robustesse.
+
+Tests
+Peu de tests, concentrés sur utilitaire CSS et search storage.
+
+Scripts existent (test, typecheck), mais pas de CI visible dans repo.
+
+Documentation
+Guide de déploiement utile, notamment dépendances natives better-sqlite3 et secret auth.
+
+8️⃣ Roadmap d’amélioration priorisée
+🔴 Urgent (0–4 semaines)
+Auth cookie-only + CSRF + retrait token localStorage/header fallback.
+
+Durcir onboarding (inscription sur invitation / validation admin).
+
+Pagination obligatoire API (familles, besoins, aides, recherche).
+
+Antivirus documents réel + validation binaire stricte.
+
+Ajouter sauvegarde/restauration + politique de rétention audit.
+
+🟠 Important (1–3 mois)
+Passage multi-tenant (organization_id + isolation stricte).
+
+Refactor storage.ts en repositories/services.
+
+Refonte UX mobile “intervention terrain”.
+
+Observabilité (metrics, traces, audit externe).
+
+🟢 Futur (3–6 mois)
+Moteur de planification interventions.
+
+KPI métier avancés (temps de prise en charge, équité de distribution).
+
+Automatisation conformité (exports RGPD, journal accès données sensibles).
+
+9️⃣ Score global (vision investisseur 200k€)
+Score technique : 5.5/10
+Solide base TypeScript/Zod, mais dette structurelle importante et monolithe métier trop centralisé.
+
+Score UX : 5/10
+Fonctionnel, mais trop dense pour terrain, accessibilité moyenne, parcours rapides insuffisants.
+
+Score scalabilité : 3.5/10
+Mono-tenant implicite, non paginé, patterns N+1, limiters non distribués.
+
+Score sécurité : 4/10
+Bonnes intentions (HttpOnly, validations), mais token localStorage + inscription ouverte + antivirus absent = risque élevé.
+
+Score produit : 6/10
+Bonne adéquation mission association, mais manque la couche “SaaS B2B industrialisable”.
+
