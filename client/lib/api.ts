@@ -139,6 +139,12 @@ export const api = {
   // Auth helpers
   getMe: () => fetchJson<{ user: import("@shared/schema").User }>("/api/auth/me"),
 
+  acceptInvite: (data: import("@shared/schema").AcceptInviteInput) =>
+    fetchJson<{ success: boolean; message: string }>("/api/auth/accept-invite", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   // Categories
   getCategories: () => fetchJson<Category[]>("/api/categories"),
 
@@ -323,6 +329,12 @@ export const api = {
 
   // Users
   getUsers: () => fetchJson<User[]>("/api/users"),
+
+  inviteUser: (data: import("@shared/schema").InviteUserInput) =>
+    fetchJson<{ user: User; message: string }>("/api/users/invite", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   createUser: (data: import("@shared/schema").CreateUserInput) =>
     fetchJson<User>("/api/users", {

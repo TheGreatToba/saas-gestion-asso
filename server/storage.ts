@@ -21,6 +21,7 @@ import type {
   FamilyDocument,
   CreateFamilyDocumentInput,
 } from "../shared/schema";
+import { createHash, randomBytes } from "node:crypto";
 import { getDb } from "./db";
 import type Database from "better-sqlite3";
 import { hashPassword, isPasswordHash, verifyPassword } from "./passwords";
@@ -393,6 +394,93 @@ class Storage {
     
     tx();
     return true;
+  }
+
+  /** Crée un token de vérification email (24 h). Retourne le token en clair à envoyer par email. */
+  createEmailVerificationToken(userId: string): string {
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const id = "evt-" + generateId();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    this.db
+      .prepare(
+        "INSERT INTO email_verification_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(id, userId, tokenHash, expiresAt);
+    return token;
+  }
+
+  /**
+   * Consomme le token : vérifie, supprime le token, active l'utilisateur.
+   * Retourne l'id utilisateur si ok, null sinon (token invalide ou expiré).
+   */
+  consumeEmailVerificationToken(token: string): string | null {
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const now = new Date().toISOString();
+    const row = this.db
+      .prepare(
+        "SELECT id, user_id FROM email_verification_tokens WHERE token_hash = ? AND expires_at > ?",
+      )
+      .get(tokenHash, now) as { id: string; user_id: string } | undefined;
+    if (!row) return null;
+    this.db.prepare("DELETE FROM email_verification_tokens WHERE id = ?").run(row.id);
+    this.db.prepare("UPDATE users SET active = 1 WHERE id = ?").run(row.user_id);
+    return row.user_id;
+  }
+
+  /** Crée un utilisateur sans mot de passe (pour invitation). active=0, mot de passe temporaire. */
+  createUserForInvite(
+    input: { name: string; email: string; role: User["role"] },
+    organizationId: string,
+  ): User {
+    const existing = this.db
+      .prepare("SELECT 1 FROM users WHERE email = ?")
+      .get(input.email);
+    if (existing) {
+      throw new Error("Email déjà utilisé");
+    }
+    const id = "usr-" + generateId();
+    const placeholderPassword = hashPassword(randomBytes(32).toString("hex"));
+    this.db
+      .prepare(
+        "INSERT INTO users (id, name, email, role, active, organization_id) VALUES (?, ?, ?, ?, 0, ?)",
+      )
+      .run(id, input.name, input.email, input.role, organizationId);
+    this.db
+      .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
+      .run(id, placeholderPassword);
+    return this.getUser(id)!;
+  }
+
+  /** Crée un token d'invitation (7 jours). Retourne le token en clair. */
+  createInvitationToken(userId: string): string {
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const id = "inv-" + generateId();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    this.db
+      .prepare(
+        "INSERT INTO invitations (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(id, userId, tokenHash, expiresAt);
+    return token;
+  }
+
+  /**
+   * Consomme un token d'invitation : vérifie, supprime le token.
+   * Retourne userId si ok, null sinon. Le mot de passe et l'activation sont à faire par l'appelant.
+   */
+  consumeInvitationToken(token: string): string | null {
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const now = new Date().toISOString();
+    const row = this.db
+      .prepare(
+        "SELECT id, user_id FROM invitations WHERE token_hash = ? AND expires_at > ?",
+      )
+      .get(tokenHash, now) as { id: string; user_id: string } | undefined;
+    if (!row) return null;
+    this.db.prepare("DELETE FROM invitations WHERE id = ?").run(row.id);
+    return row.user_id;
   }
 
   // ==================== CATEGORIES ====================

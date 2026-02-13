@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from "express";
 
-type Key = string;
+export type Key = string;
 
-interface Bucket {
+export interface Bucket {
   count: number;
   firstAttemptAt: number;
   blockedUntil?: number;
@@ -11,10 +11,11 @@ interface Bucket {
 /**
  * Store interface for rate limit state. Allows swapping in-memory store for
  * Redis (RATE_LIMIT_REDIS_URL) when scaling horizontally.
+ * Async to support Redis; in-memory store resolves synchronously.
  */
 export interface RateLimitStore {
-  get(key: Key): Bucket | undefined;
-  set(key: Key, bucket: Bucket): void;
+  get(key: Key): Bucket | undefined | Promise<Bucket | undefined>;
+  set(key: Key, bucket: Bucket): void | Promise<void>;
 }
 
 const inMemoryBuckets = new Map<Key, Bucket>();
@@ -94,46 +95,53 @@ export const createRateLimiter = (options: RateLimitOptions): RequestHandler => 
     const keyBase = keyFromRequest?.(req) ?? getClientIp(req);
     const key = `${name}:${keyBase}`;
     const now = Date.now();
-    const bucket = store.get(key);
 
-    if (bucket?.blockedUntil && bucket.blockedUntil > now) {
-      // Basic logging to help monitor abusive sources and attacks.
-      console.warn(
-        `[rate-limit] key="${key}" still blocked until ${new Date(
-          bucket.blockedUntil,
-        ).toISOString()}`,
-      );
-      res.status(429).json({
-        error:
-          "Trop de requêtes depuis cette origine. Réessayez plus tard.",
-      });
-      return;
-    }
+    const run = async () => {
+      const bucket = await Promise.resolve(store.get(key));
 
-    if (!bucket || now - bucket.firstAttemptAt > windowMs) {
-      store.set(key, { count: 1, firstAttemptAt: now });
-      return next();
-    }
+      if (bucket?.blockedUntil && bucket.blockedUntil > now) {
+        console.warn(
+          `[rate-limit] key="${key}" still blocked until ${new Date(
+            bucket.blockedUntil,
+          ).toISOString()}`,
+        );
+        res.status(429).json({
+          error:
+            "Trop de requêtes depuis cette origine. Réessayez plus tard.",
+        });
+        return;
+      }
 
-    bucket.count += 1;
-    store.set(key, bucket);
+      if (!bucket || now - bucket.firstAttemptAt > windowMs) {
+        await Promise.resolve(store.set(key, { count: 1, firstAttemptAt: now }));
+        return next();
+      }
 
-    if (bucket.count > maxAttempts) {
-      bucket.blockedUntil = now + blockMs;
-      store.set(key, bucket);
+      bucket.count += 1;
+      await Promise.resolve(store.set(key, bucket));
 
-      console.warn(
-        `[rate-limit] key="${key}" blocked for ${blockMs}ms after ${bucket.count} attempts in ${windowMs}ms window`,
-      );
+      if (bucket.count > maxAttempts) {
+        bucket.blockedUntil = now + blockMs;
+        await Promise.resolve(store.set(key, bucket));
 
-      res.status(429).json({
-        error:
-          "Trop de requêtes depuis cette origine. Réessayez plus tard.",
-      });
-      return;
-    }
+        console.warn(
+          `[rate-limit] key="${key}" blocked for ${blockMs}ms after ${bucket.count} attempts in ${windowMs}ms window`,
+        );
 
-    return next();
+        res.status(429).json({
+          error:
+            "Trop de requêtes depuis cette origine. Réessayez plus tard.",
+        });
+        return;
+      }
+
+      next();
+    };
+
+    run().catch((err) => {
+      console.error("[rate-limit] store error", err);
+      next(err);
+    });
   };
 };
 

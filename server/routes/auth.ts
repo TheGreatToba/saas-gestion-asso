@@ -1,8 +1,9 @@
 import { RequestHandler } from "express";
-import { LoginSchema, RegisterSchema } from "../../shared/schema";
+import { LoginSchema, RegisterSchema, AcceptInviteSchema } from "../../shared/schema";
 import { storage } from "../storage";
 import { createAuthToken } from "../auth-token";
 import { generateCsrfToken, setCsrfCookie } from "../csrf";
+import { getConfirmEmailUrl, sendConfirmEmailEmail } from "../email";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -40,7 +41,7 @@ export const handleLogin: RequestHandler = (req, res) => {
   res.json({ user: result.user });
 };
 
-export const handleRegister: RequestHandler = (req, res) => {
+export const handleRegister: RequestHandler = async (req, res) => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) {
     res
@@ -59,6 +60,9 @@ export const handleRegister: RequestHandler = (req, res) => {
       },
       "org-default",
     );
+    const token = storage.createEmailVerificationToken(user.id);
+    const confirmUrl = getConfirmEmailUrl(token);
+    await sendConfirmEmailEmail(user.email, confirmUrl);
     res.status(201).json({ user, pending: true });
   } catch (err) {
     const raw = err instanceof Error ? err.message : "Erreur serveur";
@@ -68,6 +72,45 @@ export const handleRegister: RequestHandler = (req, res) => {
     res.status(400).json({
       error: isTechnical ? "Service temporairement indisponible. Réessayez plus tard ou contactez l’administrateur." : raw,
     });
+  }
+};
+
+export const handleConfirmEmail: RequestHandler = (req, res) => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  if (!token) {
+    res.status(400).json({ error: "Lien de confirmation invalide ou expiré" });
+    return;
+  }
+  const userId = storage.consumeEmailVerificationToken(token);
+  if (!userId) {
+    res.status(400).json({ error: "Lien de confirmation invalide ou expiré" });
+    return;
+  }
+  res.status(200).json({ success: true, message: "Votre compte est activé. Vous pouvez vous connecter." });
+};
+
+export const handleAcceptInvite: RequestHandler = (req, res) => {
+  const parsed = AcceptInviteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "Données invalides", details: parsed.error.flatten() });
+    return;
+  }
+  const userId = storage.consumeInvitationToken(parsed.data.token);
+  if (!userId) {
+    res.status(400).json({ error: "Lien d'invitation invalide ou expiré" });
+    return;
+  }
+  try {
+    storage.updateUser(userId, {
+      password: parsed.data.password,
+      active: true,
+    });
+    res.status(200).json({ success: true, message: "Mot de passe défini. Vous pouvez vous connecter." });
+  } catch (err) {
+    console.error("[auth/accept-invite]", err);
+    res.status(500).json({ error: "Erreur lors de l'activation du compte." });
   }
 };
 

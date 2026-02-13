@@ -6,11 +6,13 @@ import { handleDemo } from "./routes/demo";
 import {
   handleLogin,
   handleRegister,
+  handleConfirmEmail,
+  handleAcceptInvite,
   handleGetUsers,
   handleLogout,
   handleMe,
 } from "./routes/auth";
-import { handleCreateUser, handleUpdateUser, handleDeleteUser } from "./routes/users";
+import { handleInviteUser, handleCreateUser, handleUpdateUser, handleDeleteUser } from "./routes/users";
 import {
   handleGetFamilies,
   handleGetFamily,
@@ -69,7 +71,8 @@ import {
 } from "./routes/documents";
 import { storage } from "./storage";
 import { verifyAuthToken } from "./auth-token";
-import { rateLimitLogin } from "./rate-limit";
+import { rateLimitLogin, setRateLimitStore } from "./rate-limit";
+import { createRedisRateLimitStore } from "./rate-limit-redis";
 import { requireCsrf, generateCsrfToken, setCsrfCookie } from "./csrf";
 import { asyncHandler, AppError, isAppError } from "./errors";
 import {
@@ -134,6 +137,18 @@ const requireAdmin: RequestHandler = (_req, res, next) => {
 
 export function createServer() {
   const app = express();
+
+  // Rate limit store: Redis if RATE_LIMIT_REDIS_URL set, else in-memory
+  const redisUrl = process.env.RATE_LIMIT_REDIS_URL;
+  if (redisUrl) {
+    try {
+      const redisStore = createRedisRateLimitStore(redisUrl);
+      setRateLimitStore(redisStore);
+      console.log("[rate-limit] Using Redis store for horizontal scaling");
+    } catch (err) {
+      console.warn("[rate-limit] Redis init failed, using in-memory store:", err);
+    }
+  }
 
   // Middleware
   const allowedOriginsEnv = process.env.CORS_ORIGINS;
@@ -244,6 +259,8 @@ export function createServer() {
     rateLimitLogin,
     asyncHandler(handleRegister),
   );
+  app.get("/api/auth/confirm-email", asyncHandler(handleConfirmEmail));
+  app.post("/api/auth/accept-invite", rateLimitLogin, asyncHandler(handleAcceptInvite));
   app.get("/api/auth/me", requireAuth, asyncHandler(handleMe));
   app.post("/api/auth/logout", requireAuth, asyncHandler(handleLogout));
 
@@ -305,6 +322,12 @@ export function createServer() {
     requireAuth,
     requireAdmin,
     asyncHandler(handleGetUsers),
+  );
+  app.post(
+    "/api/users/invite",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handleInviteUser),
   );
   app.post(
     "/api/users",

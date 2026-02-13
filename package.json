@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.744.0",
+    "ioredis": "^5.4.1",
+    "nodemailer": "^6.9.16",
     "@aws-sdk/s3-request-presigner": "^3.744.0",
     "better-sqlite3": "^11.6.0",
     "cookie-parser": "^1.4.7",
@@ -66,6 +68,7 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/nodemailer": "^6.4.17",
     "@types/node": "^24.2.1",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",

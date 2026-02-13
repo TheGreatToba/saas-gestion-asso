@@ -57,6 +57,21 @@ export const UpdateUserSchema = z.object({
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 
+/** Invitation par un admin : email, rôle, nom optionnel (pas de mot de passe). */
+export const InviteUserSchema = z.object({
+  email: z.string().email("Email invalide"),
+  role: UserRole.default("volunteer"),
+  name: z.string().min(1, "Nom requis").optional(),
+});
+export type InviteUserInput = z.infer<typeof InviteUserSchema>;
+
+/** Acceptation d'invitation : token du lien + nouveau mot de passe. */
+export const AcceptInviteSchema = z.object({
+  token: z.string().min(1, "Token requis"),
+  password: z.string().min(6, "Mot de passe : 6 caractères minimum"),
+});
+export type AcceptInviteInput = z.infer<typeof AcceptInviteSchema>;
+
 // ============ CATEGORY (grouping for aid/need types) ============
 
 export const CategorySchema = z.object({

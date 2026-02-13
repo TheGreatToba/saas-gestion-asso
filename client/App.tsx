@@ -12,6 +12,8 @@ import type { User } from "@shared/schema";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ConfirmEmail from "./pages/ConfirmEmail";
+import AcceptInvite from "./pages/AcceptInvite";
 import Dashboard from "./pages/Dashboard";
 import Families from "./pages/Families";
 import FamilyDetail from "./pages/FamilyDetail";
@@ -119,6 +121,8 @@ export default function App() {
               <Route path={ROUTES.home} element={<Index />} />
               <Route path={ROUTES.login} element={<Login />} />
               <Route path={ROUTES.register} element={<Register />} />
+              <Route path={ROUTES.confirmEmail} element={<ConfirmEmail />} />
+              <Route path={ROUTES.acceptInvite} element={<AcceptInvite />} />
               <Route
                 path={ROUTES.dashboard}
                 element={

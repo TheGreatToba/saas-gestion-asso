@@ -74,7 +74,7 @@ export default function Register() {
             <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-4 rounded-lg mb-4 text-sm">
               <p className="font-medium">Compte créé</p>
               <p className="mt-1">
-                Votre compte est en attente de validation par un administrateur.
+                Un email de confirmation vous a été envoyé. Cliquez sur le lien dans l'email pour activer votre compte.
                 Vous pourrez vous connecter une fois qu’il aura été activé.
               </p>
               <Link

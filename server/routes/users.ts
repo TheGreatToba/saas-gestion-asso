@@ -1,6 +1,45 @@
 import { RequestHandler } from "express";
-import { CreateUserSchema, UpdateUserSchema } from "../../shared/schema";
+import { CreateUserSchema, UpdateUserSchema, InviteUserSchema } from "../../shared/schema";
 import { storage } from "../storage";
+import { getAcceptInviteUrl, sendInvitationEmail } from "../email";
+
+export const handleInviteUser: RequestHandler = async (req, res) => {
+  const parsed = InviteUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "Données invalides", details: parsed.error.flatten() });
+    return;
+  }
+  const actor = (res as any).locals?.user as
+    | { id: string; name: string; organizationId?: string }
+    | undefined;
+  const orgId = actor?.organizationId ?? "org-default";
+  try {
+    const name = parsed.data.name ?? parsed.data.email.split("@")[0] ?? "Invité";
+    const user = storage.createUserForInvite(
+      { name, email: parsed.data.email, role: parsed.data.role },
+      orgId,
+    );
+    const token = storage.createInvitationToken(user.id);
+    const inviteUrl = getAcceptInviteUrl(token);
+    await sendInvitationEmail(user.email, inviteUrl);
+    if (actor) {
+      storage.appendAuditLog(actor.organizationId ?? "org-default", {
+        userId: actor.id,
+        userName: actor.name,
+        action: "invited",
+        entityType: "user",
+        entityId: user.id,
+        details: user.email,
+      });
+    }
+    res.status(201).json({ user, message: "Invitation envoyée par email." });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erreur serveur";
+    res.status(400).json({ error: message });
+  }
+};
 
 export const handleCreateUser: RequestHandler = (req, res) => {
   const parsed = CreateUserSchema.safeParse(req.body);

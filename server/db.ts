@@ -285,6 +285,38 @@ function runMigrations(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_needs_organization ON needs(organization_id);
     CREATE INDEX IF NOT EXISTS idx_aids_organization ON aids(organization_id);
   `);
+
+  // Migration: email_verification_tokens (double opt-in inscription)
+  if (schemaVersion < 2) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS email_verification_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_email_verification_user ON email_verification_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_email_verification_expires ON email_verification_tokens(expires_at);
+    `);
+    database.prepare("UPDATE _schema_version SET version = 2").run();
+  }
+
+  // Migration: invitations (invitation par admin)
+  const versionRow2 = database.prepare("SELECT version FROM _schema_version").get() as { version: number } | undefined;
+  const schemaVersion2 = versionRow2?.version ?? 0;
+  if (schemaVersion2 < 3) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS invitations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_invitations_expires ON invitations(expires_at);
+    `);
+    database.prepare("UPDATE _schema_version SET version = 3").run();
+  }
 }
 
 function now(): string {

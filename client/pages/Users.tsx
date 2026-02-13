@@ -18,13 +18,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { UserPlus, Shield, User, Search, Pencil, Power, Trash2 } from "lucide-react";
+import { UserPlus, Shield, User, Search, Pencil, Power, Trash2, Mail } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { CreateUserInput, UpdateUserInput, User as UserType } from "@shared/schema";
+import type { CreateUserInput, UpdateUserInput, InviteUserInput, User as UserType } from "@shared/schema";
+
+const emptyInviteForm: InviteUserInput = {
+  email: "",
+  role: "volunteer",
+  name: "",
+};
 
 const emptyForm: CreateUserInput = {
   name: "",
@@ -44,6 +50,8 @@ export default function Users() {
   const [deleteUser, setDeleteUser] = useState<UserType | null>(null);
   const [form, setForm] = useState<CreateUserInput>(emptyForm);
   const [password, setPassword] = useState("");
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteForm, setInviteForm] = useState<InviteUserInput>(emptyInviteForm);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -103,6 +111,19 @@ export default function Users() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast({ title: "Compte supprimé" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: api.inviteUser,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setShowInviteForm(false);
+      setInviteForm(emptyInviteForm);
+      toast({ title: data.message ?? "Invitation envoyée" });
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
@@ -172,10 +193,16 @@ export default function Users() {
               {users.length} compte{users.length !== 1 ? "s" : ""} au total
             </p>
           </div>
-          <Button onClick={openCreate} className="gap-2">
-            <UserPlus className="w-4 h-4" />
-            Nouveau compte
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowInviteForm(true)} className="gap-2">
+              <Mail className="w-4 h-4" />
+              Inviter
+            </Button>
+            <Button onClick={openCreate} className="gap-2">
+              <UserPlus className="w-4 h-4" />
+              Nouveau compte
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 mb-6">
@@ -382,6 +409,76 @@ export default function Users() {
                     : editingUser
                     ? "Mettre à jour"
                     : "Créer le compte"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showInviteForm} onOpenChange={setShowInviteForm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Inviter un utilisateur</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Un email avec un lien d&apos;invitation sera envoyé. L&apos;invité définira son mot de passe en cliquant sur le lien.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                inviteMutation.mutate({
+                  email: inviteForm.email,
+                  role: inviteForm.role,
+                  ...(inviteForm.name?.trim() ? { name: inviteForm.name.trim() } : {}),
+                });
+              }}
+              className="space-y-4 mt-2"
+            >
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="prenom@association.org"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Nom (optionnel)</Label>
+                <Input
+                  value={inviteForm.name ?? ""}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  placeholder="Par défaut : partie avant @ de l'email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rôle *</Label>
+                <Select
+                  value={inviteForm.role}
+                  onValueChange={(v: "admin" | "volunteer") =>
+                    setInviteForm({ ...inviteForm, role: v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="volunteer">Bénévole</SelectItem>
+                    <SelectItem value="admin">Administrateur</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowInviteForm(false)}
+                >
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={inviteMutation.isPending}>
+                  {inviteMutation.isPending ? "Envoi..." : "Envoyer l'invitation"}
                 </Button>
               </div>
             </form>
