@@ -271,8 +271,10 @@ export function createServer() {
   });
 
   // Metrics (admin only)
-  app.get("/api/metrics", requireAuth, requireAdmin, (_req, res) => {
-    res.status(200).json(getMetrics());
+  app.get("/api/metrics", requireAuth, requireAdmin, (req, res) => {
+    const user = res.locals.user as { organizationId?: string } | undefined;
+    const orgId = user?.organizationId;
+    res.status(200).json(getMetrics(orgId));
   });
 
   // Legacy routes (public)
@@ -313,8 +315,8 @@ export function createServer() {
     res.json(org);
   });
 
-  // Categories (public read, admin write)
-  app.get("/api/categories", asyncHandler(handleGetCategories));
+  // Categories (authenticated; filtered by organization)
+  app.get("/api/categories", requireAuth, asyncHandler(handleGetCategories));
   app.post(
     "/api/categories",
     requireAuth,
@@ -334,10 +336,11 @@ export function createServer() {
     asyncHandler(handleDeleteCategory),
   );
 
-  // Articles (public read, admin write)
-  app.get("/api/articles", asyncHandler(handleGetAllArticles));
+  // Articles (authenticated; filtered by organization)
+  app.get("/api/articles", requireAuth, asyncHandler(handleGetAllArticles));
   app.get(
     "/api/categories/:categoryId/articles",
+    requireAuth,
     asyncHandler(handleGetArticlesByCategory),
   );
   app.post(

@@ -491,14 +491,14 @@ export default function FamilyDetail() {
                             <p className="font-medium text-sm">
                               {event.title}
                             </p>
-                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                            <span className="text-sm text-muted-foreground shrink-0 ml-2">
                               {format(new Date(event.date), "d MMM yyyy", {
                                 locale: fr,
                               })}
                             </span>
                           </div>
                           {event.subtitle && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               {event.subtitle}
                             </p>
                           )}
@@ -600,16 +600,16 @@ export default function FamilyDetail() {
                           <p className="font-medium">
                             {getCategoryLabel(need.type)}
                           </p>
-                          <Badge
+                            <Badge
                             variant="outline"
-                            className={`text-xs ${statusBadgeClasses(need.status)}`}
+                            className={`text-sm ${statusBadgeClasses(need.status)}`}
                           >
                             {NEED_STATUS_LABELS[need.status]}
                           </Badge>
                           {(need as EnrichedNeed).priorityLevel && (
                             <Badge
                               variant="outline"
-                              className={`text-xs ${priorityBadgeClasses((need as EnrichedNeed).priorityLevel)}`}
+                              className={`text-sm ${priorityBadgeClasses((need as EnrichedNeed).priorityLevel)}`}
                             >
                               {PRIORITY_LABELS[(need as EnrichedNeed).priorityLevel]}
                             </Badge>
@@ -621,7 +621,7 @@ export default function FamilyDetail() {
                           </p>
                         )}
                         {need.comment && (
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-sm text-muted-foreground mt-1">
                             {need.comment}
                           </p>
                         )}
@@ -684,7 +684,7 @@ export default function FamilyDetail() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {format(new Date(aid.date), "d MMM yyyy", {
                               locale: fr,
                             })}
@@ -706,7 +706,7 @@ export default function FamilyDetail() {
                         {aid.volunteerName} — {AID_SOURCE_LABELS[aid.source]}
                       </p>
                       {aid.notes && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                           {aid.notes}
                         </p>
                       )}
@@ -715,7 +715,7 @@ export default function FamilyDetail() {
                           href={aid.proofUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-1"
                         >
                           📎 Voir la preuve
                         </a>
@@ -756,7 +756,7 @@ export default function FamilyDetail() {
                         <p className="font-medium text-sm">
                           {note.volunteerName}
                         </p>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           {format(new Date(note.date), "d MMM yyyy", {
                             locale: fr,
                           })}
@@ -801,7 +801,7 @@ export default function FamilyDetail() {
                         <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
                           <p className="font-medium truncate">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm text-muted-foreground">
                             {FAMILY_DOCUMENT_TYPE_LABELS[doc.documentType]} — {doc.uploadedByName} — {format(new Date(doc.uploadedAt), "d MMM yyyy", { locale: fr })}
                           </p>
                         </div>
@@ -1022,7 +1022,7 @@ export default function FamilyDetail() {
             if (pendingNeeds.length === 0) return null;
             return (
               <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-                <p className="text-xs font-semibold text-orange-800 mb-2">
+                <p className="text-sm font-semibold text-orange-800 mb-2">
                   Besoins en attente — cliquez pour pré-remplir le type :
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1030,7 +1030,7 @@ export default function FamilyDetail() {
                     <button
                       key={need.id}
                       type="button"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-white border border-orange-200 text-orange-800 hover:bg-orange-100 transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm font-medium bg-white border border-orange-200 text-orange-800 hover:bg-orange-100 transition"
                       onClick={() => {
                         setAddAidPrefillType(need.type);
                         setAddAidPrefillNotes(need.details ?? "");
@@ -1040,7 +1040,7 @@ export default function FamilyDetail() {
                       {need.details && <span className="opacity-70">({need.details})</span>}
                       <Badge
                         variant="outline"
-                        className={`text-[10px] px-1 py-0 ${statusBadgeClasses(need.status)}`}
+                        className={`text-xs px-1 py-0 ${statusBadgeClasses(need.status)}`}
                       >
                         {NEED_STATUS_LABELS[need.status]}
                       </Badge>
@@ -1054,14 +1054,14 @@ export default function FamilyDetail() {
           {/* Recent aids — anti-redundancy */}
           {aids.length > 0 && (
             <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-              <p className="text-xs font-semibold text-blue-800 mb-2">
+              <p className="text-sm font-semibold text-blue-800 mb-2">
                 Déjà donné récemment :
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {aids.slice(0, 5).map((aid) => (
                   <span
                     key={aid.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-700"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm bg-blue-100 text-blue-700"
                   >
                     {getCategoryLabel(aid.type)} x{aid.quantity}
                     <span className="opacity-60">

@@ -22,7 +22,13 @@ export const handleGetAids: RequestHandler = (req, res) => {
 };
 
 export const handleGetAidsByFamily: RequestHandler = (req, res) => {
-  res.json(storage.getAidsByFamily(req.params.familyId as string));
+  const orgId = getOrgId(res);
+  const familyId = req.params.familyId as string;
+  if (!storage.getFamily(orgId, familyId)) {
+    res.status(404).json({ error: "Famille non trouvée" });
+    return;
+  }
+  res.json(storage.getAidsByFamily(familyId));
 };
 
 export const handleCreateAid: RequestHandler = (req, res) => {
@@ -40,7 +46,8 @@ export const handleCreateAid: RequestHandler = (req, res) => {
     return;
   }
 
-  const aid = storage.createAid({
+  const orgId = user.organizationId ?? "org-default";
+  const aid = storage.createAid(orgId, {
     ...parsed.data,
     volunteerId: user.id,
     volunteerName: user.name,
@@ -60,8 +67,9 @@ export const handleCreateAid: RequestHandler = (req, res) => {
 };
 
 export const handleDeleteAid: RequestHandler = (req, res) => {
+  const orgId = getOrgId(res);
   const id = req.params.id as string;
-  const success = storage.deleteAid(id);
+  const success = storage.deleteAid(id, orgId);
   if (!success) {
     res.status(404).json({ error: "Aide non trouvée" });
     return;

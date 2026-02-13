@@ -68,7 +68,8 @@ export const handleCreateNeed: RequestHandler = (req, res) => {
     res.status(400).json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
-  const need = storage.createNeed(parsed.data);
+  const orgId = getOrgId(res);
+  const need = storage.createNeed(orgId, parsed.data);
   const user = (res as any).locals?.user;
   if (user) {
     storage.appendAuditLog(user.organizationId ?? "org-default", {
@@ -89,7 +90,8 @@ export const handleUpdateNeed: RequestHandler = (req, res) => {
     res.status(400).json({ error: "Données invalides", details: parsed.error.flatten() });
     return;
   }
-  const need = storage.updateNeed(req.params.id as string, parsed.data);
+  const orgId = getOrgId(res);
+  const need = storage.updateNeed(req.params.id as string, orgId, parsed.data);
   if (!need) {
     res.status(404).json({ error: "Besoin non trouvé" });
     return;
@@ -108,8 +110,9 @@ export const handleUpdateNeed: RequestHandler = (req, res) => {
 };
 
 export const handleDeleteNeed: RequestHandler = (req, res) => {
+  const orgId = getOrgId(res);
   const id = req.params.id as string;
-  const success = storage.deleteNeed(id);
+  const success = storage.deleteNeed(id, orgId);
   if (!success) {
     res.status(404).json({ error: "Besoin non trouvé" });
     return;

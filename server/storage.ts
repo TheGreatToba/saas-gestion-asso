@@ -37,6 +37,8 @@ import { NeedsRepository, mapNeedRow, type NeedRow } from "./repositories/needs.
 import { AidsRepository, mapAidRow, type AidRow } from "./repositories/aids.repository";
 import { UsersRepository } from "./repositories/users.repository";
 import { InterventionsRepository } from "./repositories/interventions.repository";
+import { AuditRepository } from "./repositories/audit.repository";
+import { DocumentsRepository } from "./repositories/documents.repository";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -106,56 +108,6 @@ function mapArticle(r: ArticleRow): Article {
   };
 }
 
-type AuditLogRow = {
-  id: string;
-  user_id: string;
-  user_name: string;
-  action: string;
-  entity_type: string;
-  entity_id: string;
-  details: string | null;
-  created_at: string;
-};
-function mapAuditLog(r: AuditLogRow): AuditLog {
-  return {
-    id: r.id,
-    userId: r.user_id,
-    userName: r.user_name,
-    action: r.action as AuditLog["action"],
-    entityType: r.entity_type as AuditLog["entityType"],
-    entityId: r.entity_id,
-    details: r.details ?? undefined,
-    createdAt: r.created_at,
-  };
-}
-
-type FamilyDocumentRow = {
-  id: string;
-  family_id: string;
-  name: string;
-  document_type: string;
-  file_data: string | null;
-  mime_type: string;
-  uploaded_at: string;
-  uploaded_by: string;
-  uploaded_by_name: string;
-  file_key: string | null;
-};
-function mapFamilyDocument(r: FamilyDocumentRow): FamilyDocument {
-  return {
-    id: r.id,
-    familyId: r.family_id,
-    name: r.name,
-    documentType: r.document_type as FamilyDocument["documentType"],
-    fileKey: r.file_key ?? "",
-    mimeType: r.mime_type,
-    uploadedAt: r.uploaded_at,
-    uploadedBy: r.uploaded_by,
-    uploadedByName: r.uploaded_by_name,
-    // URL signée ajoutée au niveau des routes (non stockée en base)
-    downloadUrl: undefined,
-  };
-}
 
 class Storage {
   private testDb?: Database.Database;
@@ -166,6 +118,8 @@ class Storage {
   private aidsRepo: AidsRepository;
   private usersRepo: UsersRepository;
   private interventionsRepo: InterventionsRepository;
+  private auditRepo: AuditRepository;
+  private documentsRepo: DocumentsRepository;
 
   constructor(testDb?: Database.Database) {
     this.testDb = testDb;
@@ -177,6 +131,8 @@ class Storage {
     this.aidsRepo = new AidsRepository(getDbInstance);
     this.usersRepo = new UsersRepository(getDbInstance);
     this.interventionsRepo = new InterventionsRepository(getDbInstance);
+    this.auditRepo = new AuditRepository(getDbInstance);
+    this.documentsRepo = new DocumentsRepository(getDbInstance);
   }
 
   private get db(): Database.Database {
@@ -338,25 +294,32 @@ class Storage {
 
   // ==================== CATEGORIES ====================
 
-  getAllCategories(): Category[] {
+  private defaultOrg(): string {
+    return "org-default";
+  }
+
+  getAllCategories(organizationId: string): Category[] {
+    const org = organizationId || this.defaultOrg();
     const rows = this.db
       .prepare(
-        "SELECT id, name, description, created_at FROM categories ORDER BY name",
+        "SELECT id, name, description, created_at FROM categories WHERE organization_id = ? ORDER BY name",
       )
-      .all() as CategoryRow[];
+      .all(org) as CategoryRow[];
     return rows.map(mapCategory);
   }
 
-  getCategory(id: string): Category | null {
+  getCategory(id: string, organizationId: string): Category | null {
+    const org = organizationId || this.defaultOrg();
     const r = this.db
       .prepare(
-        "SELECT id, name, description, created_at FROM categories WHERE id = ?",
+        "SELECT id, name, description, created_at FROM categories WHERE id = ? AND organization_id = ?",
       )
-      .get(id) as CategoryRow | undefined;
+      .get(id, org) as CategoryRow | undefined;
     return r ? mapCategory(r) : null;
   }
 
-  createCategory(input: CreateCategoryInput): Category {
+  createCategory(organizationId: string, input: CreateCategoryInput): Category {
+    const org = organizationId || this.defaultOrg();
     const slug = input.name
       .toLowerCase()
       .normalize("NFD")
@@ -365,15 +328,15 @@ class Storage {
       .replace(/^-|-$/g, "");
     let id = slug || "cat-" + generateId();
     const existing = this.db
-      .prepare("SELECT 1 FROM categories WHERE id = ?")
-      .get(id);
+      .prepare("SELECT 1 FROM categories WHERE id = ? AND organization_id = ?")
+      .get(id, org);
     if (existing) id = id + "-" + generateId();
     const createdAt = now();
     this.db
       .prepare(
-        "INSERT INTO categories (id, name, description, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO categories (id, name, description, created_at, organization_id) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(id, input.name, input.description ?? "", createdAt);
+      .run(id, input.name, input.description ?? "", createdAt, org);
     return {
       id,
       name: input.name,
@@ -384,25 +347,30 @@ class Storage {
 
   updateCategory(
     id: string,
+    organizationId: string,
     input: Partial<CreateCategoryInput>,
   ): Category | null {
+    const org = organizationId || this.defaultOrg();
     const r = this.db
       .prepare(
-        "SELECT id, name, description, created_at FROM categories WHERE id = ?",
+        "SELECT id, name, description, created_at FROM categories WHERE id = ? AND organization_id = ?",
       )
-      .get(id) as CategoryRow | undefined;
+      .get(id, org) as CategoryRow | undefined;
     if (!r) return null;
     const name = input.name ?? r.name;
     const description =
       input.description !== undefined ? input.description : r.description;
     this.db
-      .prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?")
-      .run(name, description ?? "", id);
+      .prepare("UPDATE categories SET name = ?, description = ? WHERE id = ? AND organization_id = ?")
+      .run(name, description ?? "", id, org);
     return mapCategory({ ...r, name, description: description ?? "" });
   }
 
-  deleteCategory(id: string): boolean {
-    const info = this.db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  deleteCategory(id: string, organizationId: string): boolean {
+    const org = organizationId || this.defaultOrg();
+    const info = this.db
+      .prepare("DELETE FROM categories WHERE id = ? AND organization_id = ?")
+      .run(id, org);
     return info.changes > 0;
   }
 
@@ -417,39 +385,46 @@ class Storage {
 
   // ==================== ARTICLES ====================
 
-  getAllArticles(): Article[] {
+  getAllArticles(organizationId: string): Article[] {
+    const org = organizationId || this.defaultOrg();
     const rows = this.db
       .prepare(
-        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles ORDER BY name",
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE organization_id = ? ORDER BY name",
       )
-      .all() as ArticleRow[];
+      .all(org) as ArticleRow[];
     return rows.map(mapArticle);
   }
 
-  getArticlesByCategory(categoryId: string): Article[] {
+  getArticlesByCategory(categoryId: string, organizationId: string): Article[] {
+    const org = organizationId || this.defaultOrg();
     const rows = this.db
       .prepare(
-        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE category_id = ? ORDER BY name",
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE category_id = ? AND organization_id = ? ORDER BY name",
       )
-      .all(categoryId) as ArticleRow[];
+      .all(categoryId, org) as ArticleRow[];
     return rows.map(mapArticle);
   }
 
-  getArticle(id: string): Article | null {
+  getArticle(id: string, organizationId: string): Article | null {
+    const org = organizationId || this.defaultOrg();
     const r = this.db
       .prepare(
-        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ? AND organization_id = ?",
       )
-      .get(id) as ArticleRow | undefined;
+      .get(id, org) as ArticleRow | undefined;
     return r ? mapArticle(r) : null;
   }
 
-  createArticle(input: CreateArticleInput): Article {
+  createArticle(organizationId: string, input: CreateArticleInput): Article {
+    const org = organizationId || this.defaultOrg();
+    if (!this.getCategory(input.categoryId, org)) {
+      throw new Error("Catégorie non trouvée dans cette organisation");
+    }
     const id = "art-" + generateId();
     const createdAt = now();
     this.db
       .prepare(
-        "INSERT INTO articles (id, category_id, name, description, unit, stock_quantity, stock_min, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO articles (id, category_id, name, description, unit, stock_quantity, stock_min, created_at, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         id,
@@ -460,6 +435,7 @@ class Storage {
         input.stockQuantity ?? 0,
         input.stockMin ?? 0,
         createdAt,
+        org,
       );
     return mapArticle({
       id,
@@ -475,13 +451,15 @@ class Storage {
 
   updateArticle(
     id: string,
+    organizationId: string,
     input: Partial<Omit<CreateArticleInput, "categoryId">>,
   ): Article | null {
+    const org = organizationId || this.defaultOrg();
     const r = this.db
       .prepare(
-        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ? AND organization_id = ?",
       )
-      .get(id) as ArticleRow | undefined;
+      .get(id, org) as ArticleRow | undefined;
     if (!r) return null;
     const name = input.name ?? r.name;
     const description =
@@ -495,9 +473,9 @@ class Storage {
       input.stockMin !== undefined ? input.stockMin : r.stock_min;
     this.db
       .prepare(
-        "UPDATE articles SET name = ?, description = ?, unit = ?, stock_quantity = ?, stock_min = ? WHERE id = ?",
+        "UPDATE articles SET name = ?, description = ?, unit = ?, stock_quantity = ?, stock_min = ? WHERE id = ? AND organization_id = ?",
       )
-      .run(name, description ?? "", unit, stockQuantity, stockMin, id);
+      .run(name, description ?? "", unit, stockQuantity, stockMin, id, org);
     return mapArticle({
       ...r,
       name,
@@ -508,23 +486,25 @@ class Storage {
     });
   }
 
-  deleteArticle(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM articles WHERE id = ?").run(id).changes > 0
-    );
+  deleteArticle(id: string, organizationId: string): boolean {
+    const org = organizationId || this.defaultOrg();
+    return this.db
+      .prepare("DELETE FROM articles WHERE id = ? AND organization_id = ?")
+      .run(id, org).changes > 0;
   }
 
-  adjustArticleStock(articleId: string, delta: number): Article | null {
+  adjustArticleStock(articleId: string, organizationId: string, delta: number): Article | null {
+    const org = organizationId || this.defaultOrg();
     const r = this.db
       .prepare(
-        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ?",
+        "SELECT id, category_id, name, description, unit, stock_quantity, stock_min, created_at FROM articles WHERE id = ? AND organization_id = ?",
       )
-      .get(articleId) as ArticleRow | undefined;
+      .get(articleId, org) as ArticleRow | undefined;
     if (!r) return null;
     const stockQuantity = Math.max(0, r.stock_quantity + delta);
     this.db
-      .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
-      .run(stockQuantity, articleId);
+      .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ? AND organization_id = ?")
+      .run(stockQuantity, articleId, org);
     return mapArticle({ ...r, stock_quantity: stockQuantity });
   }
 
@@ -706,13 +686,14 @@ class Storage {
 
   updateNeed(
     id: string,
+    organizationId: string,
     input: Partial<CreateNeedInput & { status: string }>,
   ): Need | null {
-    return this.needsRepo.update(id, input);
+    return this.needsRepo.update(id, organizationId, input);
   }
 
-  deleteNeed(id: string): boolean {
-    return this.needsRepo.delete(id);
+  deleteNeed(id: string, organizationId: string): boolean {
+    return this.needsRepo.delete(id, organizationId);
   }
 
   // ==================== INTERVENTIONS ====================
@@ -810,8 +791,8 @@ class Storage {
     return this.aidsRepo.create(organizationId, input);
   }
 
-  deleteAid(id: string): boolean {
-    return this.aidsRepo.delete(id);
+  deleteAid(id: string, organizationId: string): boolean {
+    return this.aidsRepo.delete(id, organizationId);
   }
 
   // ==================== VISIT NOTES ====================
@@ -1013,42 +994,11 @@ class Storage {
       details?: string;
     },
   ): AuditLog {
-    const id = "audit-" + generateId();
-    const createdAt = now();
-    this.db
-      .prepare(
-        "INSERT INTO audit_logs (id, organization_id, user_id, user_name, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        organizationId,
-        entry.userId,
-        entry.userName,
-        entry.action,
-        entry.entityType,
-        entry.entityId,
-        entry.details ?? null,
-        createdAt,
-      );
-    return mapAuditLog({
-      id,
-      user_id: entry.userId,
-      user_name: entry.userName,
-      action: entry.action,
-      entity_type: entry.entityType,
-      entity_id: entry.entityId,
-      details: entry.details ?? null,
-      created_at: createdAt,
-    });
+    return this.auditRepo.append(organizationId, entry);
   }
 
   getAuditLogs(organizationId: string, limit = 100): AuditLog[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM audit_logs WHERE organization_id = ? ORDER BY created_at DESC LIMIT ?",
-      )
-      .all(organizationId, limit) as AuditLogRow[];
-    return rows.map(mapAuditLog);
+    return this.auditRepo.getByOrganization(organizationId, limit);
   }
 
   /** Audit logs within a date range (inclusive), for export. */
@@ -1057,37 +1007,17 @@ class Storage {
     fromIso: string,
     toIso: string,
   ): AuditLog[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM audit_logs
-         WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
-         ORDER BY created_at ASC`,
-      )
-      .all(organizationId, fromIso, toIso) as AuditLogRow[];
-    return rows.map(mapAuditLog);
+    return this.auditRepo.getByDateRange(organizationId, fromIso, toIso);
   }
 
   pruneAuditLogsOlderThan(organizationId: string, retentionDays: number): number {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - retentionDays);
-    const cutoffIso = cutoff.toISOString();
-    const info = this.db
-      .prepare(
-        "DELETE FROM audit_logs WHERE organization_id = ? AND created_at < ?",
-      )
-      .run(organizationId, cutoffIso);
-    return info.changes ?? 0;
+    return this.auditRepo.pruneOlderThan(organizationId, retentionDays);
   }
 
   // ==================== FAMILY DOCUMENTS ====================
 
   getDocumentsByFamily(familyId: string): FamilyDocument[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM family_documents WHERE family_id = ? ORDER BY uploaded_at DESC",
-      )
-      .all(familyId) as FamilyDocumentRow[];
-    return rows.map(mapFamilyDocument);
+    return this.documentsRepo.getByFamily(familyId);
   }
 
   /**
@@ -1103,76 +1033,15 @@ class Storage {
     uploadedBy: string;
     uploadedByName: string;
   }): FamilyDocument {
-    // Idempotence best-effort : si un document identique vient d'être créé,
-    // on le renvoie au lieu d'insérer un doublon.
-    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
-    const existing = this.db
-      .prepare(
-        `SELECT * FROM family_documents
-         WHERE family_id = ?
-           AND name = ?
-           AND document_type = ?
-           AND uploaded_by = ?
-           AND uploaded_at >= ?
-         ORDER BY uploaded_at DESC
-         LIMIT 1`,
-      )
-      .get(
-        input.familyId,
-        input.name,
-        input.documentType,
-        input.uploadedBy,
-        tenSecondsAgo,
-      ) as FamilyDocumentRow | undefined;
-
-    if (existing) {
-      return mapFamilyDocument(existing);
-    }
-
-    const id = "doc-" + generateId();
-    const uploadedAt = now();
-    this.db
-      .prepare(
-        "INSERT INTO family_documents (id, family_id, name, document_type, file_data, mime_type, uploaded_at, uploaded_by, uploaded_by_name, file_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        input.familyId,
-        input.name,
-        input.documentType,
-        null, // stockage objet via file_key, plus de BLOB en base
-        input.mimeType,
-        uploadedAt,
-        input.uploadedBy,
-        input.uploadedByName,
-        input.fileKey,
-      );
-    return mapFamilyDocument({
-      id,
-      family_id: input.familyId,
-      name: input.name,
-      document_type: input.documentType,
-      file_data: null,
-      mime_type: input.mimeType,
-      uploaded_at: uploadedAt,
-      uploaded_by: input.uploadedBy,
-      uploaded_by_name: input.uploadedByName,
-      file_key: input.fileKey,
-    });
+    return this.documentsRepo.create(input);
   }
 
   getFamilyDocument(id: string): FamilyDocument | null {
-    const row = this.db
-      .prepare("SELECT * FROM family_documents WHERE id = ?")
-      .get(id) as FamilyDocumentRow | undefined;
-    return row ? mapFamilyDocument(row) : null;
+    return this.documentsRepo.getById(id);
   }
 
   deleteFamilyDocument(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM family_documents WHERE id = ?").run(id)
-        .changes > 0
-    );
+    return this.documentsRepo.delete(id);
   }
 }
 
