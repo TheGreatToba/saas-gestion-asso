@@ -21,6 +21,8 @@ import Needs from "./pages/Needs";
 import Aids from "./pages/Aids";
 import Stock from "./pages/Stock";
 import Intervention from "./pages/Intervention";
+import Planning from "./pages/Planning";
+import InterventionDetail from "./pages/InterventionDetail";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
@@ -164,6 +166,22 @@ export default function App() {
                 }
               />
               <Route
+                path={ROUTES.planning}
+                element={
+                  <ProtectedRoute>
+                    <Planning />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path={ROUTES.interventionDetail}
+                element={
+                  <ProtectedRoute>
+                    <InterventionDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path={ROUTES.aids}
                 element={
                   <ProtectedRoute>
@@ -182,9 +200,9 @@ export default function App() {
               <Route
                 path={ROUTES.reports}
                 element={
-                  <AdminRoute>
+                  <ProtectedRoute>
                     <Reports />
-                  </AdminRoute>
+                  </ProtectedRoute>
                 }
               />
               <Route

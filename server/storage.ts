@@ -1,6 +1,7 @@
 import type {
   User,
   Family,
+  Organization,
   Child,
   Need,
   Aid,
@@ -18,8 +19,12 @@ import type {
   UpdateUserInput,
   DashboardStats,
   AuditLog,
+  AuditAction,
   FamilyDocument,
   CreateFamilyDocumentInput,
+  Intervention,
+  CreateInterventionInput,
+  InterventionChecklistItem,
 } from "../shared/schema";
 import { createHash, randomBytes } from "node:crypto";
 import { getDb } from "./db";
@@ -27,6 +32,11 @@ import type Database from "better-sqlite3";
 import { hashPassword, isPasswordHash, verifyPassword } from "./passwords";
 import { FamiliesRepository, mapFamilyRow, type FamilyRow } from "./repositories/families.repository";
 import { FamilyService } from "./services/family.service";
+import { ChildrenRepository } from "./repositories/children.repository";
+import { NeedsRepository, mapNeedRow, type NeedRow } from "./repositories/needs.repository";
+import { AidsRepository, mapAidRow, type AidRow } from "./repositories/aids.repository";
+import { UsersRepository } from "./repositories/users.repository";
+import { InterventionsRepository } from "./repositories/interventions.repository";
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -37,102 +47,6 @@ function now(): string {
 }
 
 // --- Row mappers (DB snake_case -> schema camelCase) ---
-type UserRow = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  active: number;
-  organization_id: string | null;
-};
-function mapUser(r: UserRow): User {
-  return {
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    role: r.role as User["role"],
-    active: !!r.active,
-    organizationId: r.organization_id ?? "org-default",
-  };
-}
-
-type ChildRow = {
-  id: string;
-  family_id: string;
-  first_name: string;
-  age: number;
-  sex: string;
-  specific_needs: string;
-  created_at: string;
-};
-function mapChild(r: ChildRow): Child {
-  return {
-    id: r.id,
-    familyId: r.family_id,
-    firstName: r.first_name,
-    age: r.age,
-    sex: r.sex as Child["sex"],
-    specificNeeds: r.specific_needs ?? "",
-    createdAt: r.created_at,
-  };
-}
-
-type NeedRow = {
-  id: string;
-  family_id: string;
-  type: string;
-  urgency: string;
-  status: string;
-  comment: string;
-  details: string;
-  created_at: string;
-  updated_at: string;
-};
-function mapNeed(r: NeedRow): Need {
-  return {
-    id: r.id,
-    familyId: r.family_id,
-    type: r.type,
-    urgency: r.urgency as Need["urgency"],
-    status: r.status as Need["status"],
-    comment: r.comment ?? "",
-    details: r.details ?? "",
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  };
-}
-
-type AidRow = {
-  id: string;
-  family_id: string;
-  type: string;
-  article_id: string;
-  quantity: number;
-  date: string;
-  volunteer_id: string;
-  volunteer_name: string;
-  source: string;
-  notes: string;
-  proof_url: string;
-  created_at: string;
-};
-function mapAid(r: AidRow): Aid {
-  return {
-    id: r.id,
-    familyId: r.family_id,
-    type: r.type,
-    articleId: r.article_id || undefined,
-    quantity: r.quantity,
-    date: r.date,
-    volunteerId: r.volunteer_id,
-    volunteerName: r.volunteer_name,
-    source: r.source as Aid["source"],
-    notes: r.notes ?? "",
-    proofUrl: r.proof_url ?? "",
-    createdAt: r.created_at,
-  };
-}
-
 type VisitNoteRow = {
   id: string;
   family_id: string;
@@ -247,16 +161,42 @@ class Storage {
   private testDb?: Database.Database;
   private familiesRepo: FamiliesRepository;
   private familyService: FamilyService;
+  private childrenRepo: ChildrenRepository;
+  private needsRepo: NeedsRepository;
+  private aidsRepo: AidsRepository;
+  private usersRepo: UsersRepository;
+  private interventionsRepo: InterventionsRepository;
 
   constructor(testDb?: Database.Database) {
     this.testDb = testDb;
     const getDbInstance = () => this.testDb ?? getDb();
     this.familiesRepo = new FamiliesRepository(getDbInstance);
     this.familyService = new FamilyService(this.familiesRepo);
+    this.childrenRepo = new ChildrenRepository(getDbInstance);
+    this.needsRepo = new NeedsRepository(getDbInstance);
+    this.aidsRepo = new AidsRepository(getDbInstance);
+    this.usersRepo = new UsersRepository(getDbInstance);
+    this.interventionsRepo = new InterventionsRepository(getDbInstance);
   }
 
   private get db(): Database.Database {
     return this.testDb ?? getDb();
+  }
+
+  // ==================== ORGANIZATIONS ====================
+
+  getOrganization(id: string): Organization | null {
+    const r = this.db
+      .prepare("SELECT id, name, slug, created_at FROM organizations WHERE id = ?")
+      .get(id) as { id: string; name: string; slug: string; created_at: string } | undefined;
+    return r
+      ? {
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          createdAt: r.created_at,
+        }
+      : null;
   }
 
   // ==================== AUTH ====================
@@ -265,9 +205,7 @@ class Storage {
     email: string,
     password: string,
   ): { user: User | null; error?: "disabled" } {
-    const user = this.db
-      .prepare("SELECT id, name, email, role, active FROM users WHERE email = ?")
-      .get(email) as UserRow | undefined;
+    const user = this.usersRepo.getByEmail(email);
     if (!user) return { user: null };
     const row = this.db
       .prepare("SELECT password FROM passwords WHERE user_id = ?")
@@ -283,117 +221,43 @@ class Storage {
         .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
         .run(hashPassword(password), user.id);
     }
-    return { user: mapUser(user) };
+    return { user };
   }
 
   getUser(id: string): User | null {
-    const r = this.db
-      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE id = ?")
-      .get(id) as UserRow | undefined;
-    return r ? mapUser(r) : null;
+    return this.usersRepo.getById(id);
   }
 
   getAllUsers(organizationId: string): User[] {
-    const rows = this.db
-      .prepare(
-        "SELECT id, name, email, role, active, organization_id FROM users WHERE organization_id = ? ORDER BY role DESC, name",
-      )
-      .all(organizationId) as UserRow[];
-    return rows.map(mapUser);
+    return this.usersRepo.getAllByOrg(organizationId);
   }
 
   getUserByEmail(email: string): User | null {
-    const r = this.db
-      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE email = ?")
-      .get(email) as UserRow | undefined;
-    return r ? mapUser(r) : null;
+    return this.usersRepo.getByEmail(email);
   }
 
   countActiveAdmins(organizationId: string): number {
-    const row = this.db
-      .prepare(
-        "SELECT COUNT(*) as c FROM users WHERE organization_id = ? AND role = 'admin' AND active = 1",
-      )
-      .get(organizationId) as { c: number };
-    return row.c;
+    return this.usersRepo.countActiveAdmins(organizationId);
   }
 
   createUser(input: CreateUserInput, organizationId: string): User {
-    const existing = this.db
-      .prepare("SELECT 1 FROM users WHERE email = ?")
-      .get(input.email);
-    if (existing) {
-      throw new Error("Email déjà utilisé");
-    }
-    const id = "usr-" + generateId();
-
-    const tx = this.db.transaction(() => {
-      this.db
-        .prepare(
-          "INSERT INTO users (id, name, email, role, active, organization_id) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          id,
-          input.name,
-          input.email,
-          input.role,
-          input.active ? 1 : 0,
-          organizationId,
-        );
-      this.db
-        .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
-        .run(id, hashPassword(input.password));
-    });
-
-    tx();
-    return this.getUser(id)!;
+    return this.usersRepo.create(
+      organizationId,
+      input,
+      hashPassword(input.password),
+    );
   }
 
   updateUser(id: string, input: UpdateUserInput): User | null {
-    const current = this.db
-      .prepare("SELECT id, name, email, role, active, organization_id FROM users WHERE id = ?")
-      .get(id) as UserRow | undefined;
-    if (!current) return null;
-
-    if (input.email && input.email !== current.email) {
-      const existing = this.db
-        .prepare("SELECT 1 FROM users WHERE email = ?")
-        .get(input.email);
-      if (existing) {
-        throw new Error("Email déjà utilisé");
-      }
-    }
-
-    const name = input.name ?? current.name;
-    const email = input.email ?? current.email;
-    const role = input.role ?? (current.role as User["role"]);
-    const active = input.active !== undefined ? (input.active ? 1 : 0) : current.active;
-
-    this.db
-      .prepare("UPDATE users SET name = ?, email = ?, role = ?, active = ? WHERE id = ?")
-      .run(name, email, role, active, id);
-
-    if (input.password) {
-      this.db
-        .prepare("UPDATE passwords SET password = ? WHERE user_id = ?")
-        .run(hashPassword(input.password), id);
-    }
-
-    return this.getUser(id);
+    return this.usersRepo.update(
+      id,
+      input,
+      input.password ? hashPassword(input.password) : undefined,
+    );
   }
 
   deleteUser(id: string): boolean {
-    const user = this.getUser(id);
-    if (!user) return false;
-    
-    // Supprimer l'utilisateur et son mot de passe en transaction
-    const tx = this.db.transaction(() => {
-      this.db.prepare("DELETE FROM passwords WHERE user_id = ?").run(id);
-      this.db.prepare("DELETE FROM users WHERE id = ?").run(id);
-    });
-    
-    tx();
-    return true;
+    return this.usersRepo.delete(id);
   }
 
   /** Crée un token de vérification email (24 h). Retourne le token en clair à envoyer par email. */
@@ -433,23 +297,12 @@ class Storage {
     input: { name: string; email: string; role: User["role"] },
     organizationId: string,
   ): User {
-    const existing = this.db
-      .prepare("SELECT 1 FROM users WHERE email = ?")
-      .get(input.email);
-    if (existing) {
-      throw new Error("Email déjà utilisé");
-    }
-    const id = "usr-" + generateId();
     const placeholderPassword = hashPassword(randomBytes(32).toString("hex"));
-    this.db
-      .prepare(
-        "INSERT INTO users (id, name, email, role, active, organization_id) VALUES (?, ?, ?, ?, 0, ?)",
-      )
-      .run(id, input.name, input.email, input.role, organizationId);
-    this.db
-      .prepare("INSERT INTO passwords (user_id, password) VALUES (?, ?)")
-      .run(id, placeholderPassword);
-    return this.getUser(id)!;
+    return this.usersRepo.createForInvite(
+      organizationId,
+      input,
+      placeholderPassword,
+    );
   }
 
   /** Crée un token d'invitation (7 jours). Retourne le token en clair. */
@@ -797,380 +650,168 @@ class Storage {
 
     return {
       families,
-      needs: needs.map(mapNeed),
-      aids: aids.map(mapAid),
+      needs: needs.map(mapNeedRow),
+      aids: aids.map(mapAidRow),
     };
   }
 
   // ==================== CHILDREN ====================
 
+  getChild(id: string): Child | null {
+    return this.childrenRepo.getById(id);
+  }
+
   getChildrenByFamily(familyId: string): Child[] {
-    const rows = this.db
-      .prepare("SELECT * FROM children WHERE family_id = ? ORDER BY created_at")
-      .all(familyId) as ChildRow[];
-    return rows.map(mapChild);
+    return this.childrenRepo.getByFamily(familyId);
   }
 
   /** Batch load children by family ids (avoids N+1 in export). */
   getChildrenByFamilyIds(familyIds: string[]): Map<string, Child[]> {
-    const map = new Map<string, Child[]>();
-    if (familyIds.length === 0) return map;
-    const placeholders = familyIds.map(() => "?").join(",");
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM children WHERE family_id IN (${placeholders}) ORDER BY family_id, created_at`,
-      )
-      .all(...familyIds) as ChildRow[];
-    for (const r of rows) {
-      const list = map.get(r.family_id) ?? [];
-      list.push(mapChild(r));
-      map.set(r.family_id, list);
-    }
-    return map;
+    return this.childrenRepo.getByFamilyIds(familyIds);
   }
 
   createChild(input: CreateChildInput): Child {
-    const id = "ch-" + generateId();
-    const createdAt = now();
-    this.db
-      .prepare(
-        "INSERT INTO children (id, family_id, first_name, age, sex, specific_needs, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        input.familyId,
-        input.firstName,
-        input.age,
-        input.sex,
-        input.specificNeeds ?? "",
-        createdAt,
-      );
-    return mapChild({
-      id,
-      family_id: input.familyId,
-      first_name: input.firstName,
-      age: input.age,
-      sex: input.sex,
-      specific_needs: input.specificNeeds ?? "",
-      created_at: createdAt,
-    });
+    return this.childrenRepo.create(input);
   }
 
   updateChild(id: string, input: Partial<CreateChildInput>): Child | null {
-    const r = this.db.prepare("SELECT * FROM children WHERE id = ?").get(id) as
-      | ChildRow
-      | undefined;
-    if (!r) return null;
-    const firstName = input.firstName ?? r.first_name;
-    const age = input.age ?? r.age;
-    const sex = input.sex ?? r.sex;
-    const specificNeeds =
-      input.specificNeeds !== undefined
-        ? input.specificNeeds
-        : r.specific_needs;
-    this.db
-      .prepare(
-        "UPDATE children SET first_name = ?, age = ?, sex = ?, specific_needs = ? WHERE id = ?",
-      )
-      .run(firstName, age, sex, specificNeeds ?? "", id);
-    return mapChild({
-      ...r,
-      first_name: firstName,
-      age,
-      sex,
-      specific_needs: specificNeeds ?? "",
-    });
+    return this.childrenRepo.update(id, input);
   }
 
   deleteChild(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM children WHERE id = ?").run(id).changes > 0
-    );
+    return this.childrenRepo.delete(id);
   }
 
   // ==================== NEEDS ====================
-
-  getAllNeeds(): Need[] {
-    const rows = this.db
-      .prepare("SELECT * FROM needs ORDER BY created_at DESC")
-      .all() as NeedRow[];
-    return rows.map(mapNeed);
-  }
 
   getNeedsPage(
     organizationId: string,
     opts: { limit: number; offset: number; familyId?: string },
   ): { items: Need[]; total: number } {
-    const { limit, offset, familyId } = opts;
-    const baseSql = familyId
-      ? "FROM needs WHERE organization_id = ? AND family_id = ?"
-      : "FROM needs WHERE organization_id = ?";
-    const params = familyId ? [organizationId, familyId] : [organizationId];
-    const countRow = this.db
-      .prepare(`SELECT COUNT(*) as c ${baseSql}`)
-      .get(...params) as { c: number };
-    const rows = this.db
-      .prepare(
-        `SELECT * ${baseSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      )
-      .all(...params, limit, offset) as NeedRow[];
-    return { total: countRow.c, items: rows.map(mapNeed) };
+    return this.needsRepo.getPage(organizationId, opts);
   }
 
   getNeedsByFamily(familyId: string): Need[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM needs WHERE family_id = ? ORDER BY created_at DESC",
-      )
-      .all(familyId) as NeedRow[];
-    return rows.map(mapNeed);
+    return this.needsRepo.getByFamily(familyId);
   }
 
   /** Batch load needs by family ids (avoids N+1 in export). */
   getNeedsByFamilyIds(familyIds: string[]): Map<string, Need[]> {
-    const map = new Map<string, Need[]>();
-    if (familyIds.length === 0) return map;
-    const placeholders = familyIds.map(() => "?").join(",");
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM needs WHERE family_id IN (${placeholders}) ORDER BY family_id, created_at DESC`,
-      )
-      .all(...familyIds) as NeedRow[];
-    for (const r of rows) {
-      const list = map.get(r.family_id) ?? [];
-      list.push(mapNeed(r));
-      map.set(r.family_id, list);
-    }
-    return map;
+    return this.needsRepo.getByFamilyIds(familyIds);
   }
 
-  createNeed(input: CreateNeedInput): Need {
-    const id = "nd-" + generateId();
-    const createdAt = now();
-    const status = input.status ?? "pending";
-    this.db
-      .prepare(
-        "INSERT INTO needs (id, family_id, type, urgency, status, comment, details, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        input.familyId,
-        input.type,
-        input.urgency,
-        status,
-        input.comment ?? "",
-        input.details ?? "",
-        createdAt,
-        createdAt,
-      );
-    return mapNeed({
-      id,
-      family_id: input.familyId,
-      type: input.type,
-      urgency: input.urgency,
-      status,
-      comment: input.comment ?? "",
-      details: input.details ?? "",
-      created_at: createdAt,
-      updated_at: createdAt,
-    });
+  createNeed(organizationId: string, input: CreateNeedInput): Need {
+    return this.needsRepo.create(organizationId, input);
   }
 
   updateNeed(
     id: string,
     input: Partial<CreateNeedInput & { status: string }>,
   ): Need | null {
-    const r = this.db.prepare("SELECT * FROM needs WHERE id = ?").get(id) as
-      | NeedRow
-      | undefined;
-    if (!r) return null;
-    const updatedAt = now();
-    const type = input.type ?? r.type;
-    const urgency = input.urgency ?? r.urgency;
-    const status = input.status ?? r.status;
-    const comment = input.comment !== undefined ? input.comment : r.comment;
-    const details = input.details !== undefined ? input.details : r.details;
-    this.db
-      .prepare(
-        "UPDATE needs SET type = ?, urgency = ?, status = ?, comment = ?, details = ?, updated_at = ? WHERE id = ?",
-      )
-      .run(type, urgency, status, comment ?? "", details ?? "", updatedAt, id);
-    return mapNeed({
-      ...r,
-      type,
-      urgency,
-      status,
-      comment: comment ?? "",
-      details: details ?? "",
-      updated_at: updatedAt,
-    });
+    return this.needsRepo.update(id, input);
   }
 
   deleteNeed(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM needs WHERE id = ?").run(id).changes > 0
+    return this.needsRepo.delete(id);
+  }
+
+  // ==================== INTERVENTIONS ====================
+
+  getInterventionsPage(
+    organizationId: string,
+    opts: {
+      limit: number;
+      offset: number;
+      status?: string;
+      assignedUserId?: string;
+    },
+  ): { items: Intervention[]; total: number } {
+    return this.interventionsRepo.getPage(organizationId, opts);
+  }
+
+  getIntervention(id: string, organizationId: string): Intervention | null {
+    return this.interventionsRepo.getByIdAndOrg(id, organizationId);
+  }
+
+  getMyInterventions(
+    organizationId: string,
+    userId: string,
+    opts?: { status?: string },
+  ): Intervention[] {
+    return this.interventionsRepo.getByAssignedUser(organizationId, userId, opts);
+  }
+
+  createIntervention(
+    organizationId: string,
+    input: CreateInterventionInput,
+  ): Intervention {
+    const assigned = this.usersRepo.getById(input.assignedUserId);
+    const assignedUserName = assigned?.name ?? "Inconnu";
+    return this.interventionsRepo.create(
+      organizationId,
+      input,
+      assignedUserName,
     );
   }
 
-  // ==================== AIDS ====================
-
-  getAllAids(): Aid[] {
-    const rows = this.db
-      .prepare("SELECT * FROM aids ORDER BY date DESC")
-      .all() as AidRow[];
-    return rows.map(mapAid);
+  updateIntervention(
+    id: string,
+    organizationId: string,
+    input: {
+      assignedUserId?: string;
+      assignedUserName?: string;
+      plannedAt?: string;
+      checklist?: InterventionChecklistItem[];
+      notes?: string;
+    },
+  ): Intervention | null {
+    return this.interventionsRepo.update(id, organizationId, input);
   }
+
+  updateInterventionStatus(
+    id: string,
+    organizationId: string,
+    status: "todo" | "in_progress" | "done",
+  ): Intervention | null {
+    return this.interventionsRepo.updateStatus(id, organizationId, status);
+  }
+
+  updateInterventionChecklist(
+    id: string,
+    organizationId: string,
+    checklist: InterventionChecklistItem[],
+  ): Intervention | null {
+    return this.interventionsRepo.updateChecklist(id, organizationId, checklist);
+  }
+
+  deleteIntervention(id: string, organizationId: string): boolean {
+    return this.interventionsRepo.delete(id, organizationId);
+  }
+
+  // ==================== AIDS ====================
 
   getAidsPage(
     organizationId: string,
     opts: { limit: number; offset: number; familyId?: string },
   ): { items: Aid[]; total: number } {
-    const { limit, offset, familyId } = opts;
-    const baseSql = familyId
-      ? "FROM aids WHERE organization_id = ? AND family_id = ?"
-      : "FROM aids WHERE organization_id = ?";
-    const params = familyId ? [organizationId, familyId] : [organizationId];
-    const countRow = this.db
-      .prepare(`SELECT COUNT(*) as c ${baseSql}`)
-      .get(...params) as { c: number };
-    const rows = this.db
-      .prepare(
-        `SELECT * ${baseSql} ORDER BY date DESC LIMIT ? OFFSET ?`,
-      )
-      .all(...params, limit, offset) as AidRow[];
-    return { total: countRow.c, items: rows.map(mapAid) };
+    return this.aidsRepo.getPage(organizationId, opts);
   }
 
   getAidsByFamily(familyId: string): Aid[] {
-    const rows = this.db
-      .prepare("SELECT * FROM aids WHERE family_id = ? ORDER BY date DESC")
-      .all(familyId) as AidRow[];
-    return rows.map(mapAid);
+    return this.aidsRepo.getByFamily(familyId);
   }
 
   /** Batch load aids by family ids (avoids N+1 in export). */
   getAidsByFamilyIds(familyIds: string[]): Map<string, Aid[]> {
-    const map = new Map<string, Aid[]>();
-    if (familyIds.length === 0) return map;
-    const placeholders = familyIds.map(() => "?").join(",");
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM aids WHERE family_id IN (${placeholders}) ORDER BY family_id, date DESC`,
-      )
-      .all(...familyIds) as AidRow[];
-    for (const r of rows) {
-      const list = map.get(r.family_id) ?? [];
-      list.push(mapAid(r));
-      map.set(r.family_id, list);
-    }
-    return map;
+    return this.aidsRepo.getByFamilyIds(familyIds);
   }
 
-  createAid(input: CreateAidStorageInput): Aid {
-    // Protection simple contre les doubles soumissions proches dans le temps
-    const recentDuplicate = this.db
-      .prepare(
-        `SELECT * FROM aids
-         WHERE family_id = ?
-           AND type = ?
-           AND IFNULL(article_id, '') = IFNULL(?, '')
-           AND quantity = ?
-           AND date = ?
-           AND volunteer_id = ?
-           AND source = ?
-           AND notes = ?
-         ORDER BY created_at DESC
-         LIMIT 1`,
-      )
-      .get(
-        input.familyId,
-        input.type,
-        input.articleId ?? "",
-        input.quantity ?? 1,
-        input.date || "",
-        input.volunteerId,
-        input.source,
-        input.notes ?? "",
-      ) as AidRow | undefined;
-
-    if (recentDuplicate) {
-      const createdTime = new Date(recentDuplicate.created_at).getTime();
-      if (Date.now() - createdTime < 10_000) {
-        return mapAid(recentDuplicate);
-      }
-    }
-
-    const id = "aid-" + generateId();
-    const createdAt = now();
-    const date = input.date || now();
-
-    const tx = this.db.transaction(() => {
-      this.db
-        .prepare(
-          "INSERT INTO aids (id, family_id, type, article_id, quantity, date, volunteer_id, volunteer_name, source, notes, proof_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          id,
-          input.familyId,
-          input.type,
-          input.articleId ?? "",
-          input.quantity ?? 1,
-          date,
-          input.volunteerId,
-          input.volunteerName,
-          input.source,
-          input.notes ?? "",
-          input.proofUrl ?? "",
-          createdAt,
-        );
-
-      this.db
-        .prepare(
-          "UPDATE families SET last_visit_at = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(date, now(), input.familyId);
-
-      if (input.articleId) {
-        const art = this.db
-          .prepare("SELECT stock_quantity FROM articles WHERE id = ?")
-          .get(input.articleId) as { stock_quantity: number } | undefined;
-        if (art) {
-          const newQty = Math.max(
-            0,
-            art.stock_quantity - (input.quantity ?? 1),
-          );
-          this.db
-            .prepare("UPDATE articles SET stock_quantity = ? WHERE id = ?")
-            .run(newQty, input.articleId);
-        }
-      }
-
-      const matchingNeeds = this.db
-        .prepare(
-          "SELECT * FROM needs WHERE family_id = ? AND type = ? AND status != ?",
-        )
-        .all(input.familyId, input.type, "covered") as NeedRow[];
-      const upd = now();
-      for (const need of matchingNeeds) {
-        const newStatus = need.status === "pending" ? "partial" : "covered";
-        this.db
-          .prepare("UPDATE needs SET status = ?, updated_at = ? WHERE id = ?")
-          .run(newStatus, upd, need.id);
-      }
-    });
-
-    tx();
-
-    const row = this.db
-      .prepare("SELECT * FROM aids WHERE id = ?")
-      .get(id) as AidRow;
-    return mapAid(row);
+  createAid(organizationId: string, input: CreateAidStorageInput): Aid {
+    return this.aidsRepo.create(organizationId, input);
   }
 
   deleteAid(id: string): boolean {
-    return (
-      this.db.prepare("DELETE FROM aids WHERE id = ?").run(id).changes > 0
-    );
+    return this.aidsRepo.delete(id);
   }
 
   // ==================== VISIT NOTES ====================
@@ -1298,14 +939,14 @@ class Storage {
     const recentAids = recentAidsRows.map((a) => {
       const fam = familyMap[a.family_id];
       return {
-        ...mapAid(a),
+        ...mapAidRow(a),
         familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu",
       };
     });
     const urgentNeedsList = urgentNeedsRows.map((n) => {
       const fam = familyMap[n.family_id];
       return {
-        ...mapNeed(n),
+        ...mapNeedRow(n),
         familyName: fam?.number ? `Famille N° ${fam.number}` : fam?.responsibleName ?? "Inconnu",
       };
     });
@@ -1366,7 +1007,7 @@ class Storage {
     entry: {
       userId: string;
       userName: string;
-      action: "created" | "updated" | "deleted";
+      action: AuditAction;
       entityType: AuditLog["entityType"];
       entityId: string;
       details?: string;
@@ -1407,6 +1048,22 @@ class Storage {
         "SELECT * FROM audit_logs WHERE organization_id = ? ORDER BY created_at DESC LIMIT ?",
       )
       .all(organizationId, limit) as AuditLogRow[];
+    return rows.map(mapAuditLog);
+  }
+
+  /** Audit logs within a date range (inclusive), for export. */
+  getAuditLogsByDateRange(
+    organizationId: string,
+    fromIso: string,
+    toIso: string,
+  ): AuditLog[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM audit_logs
+         WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
+         ORDER BY created_at ASC`,
+      )
+      .all(organizationId, fromIso, toIso) as AuditLogRow[];
     return rows.map(mapAuditLog);
   }
 

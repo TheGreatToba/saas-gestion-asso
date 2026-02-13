@@ -16,11 +16,13 @@ import {
   Package,
   Search,
   Zap,
+  Calendar,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { USER_ROLE_LABELS } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useCategories } from "@/lib/useCategories";
@@ -32,9 +34,10 @@ interface NavItem {
   icon: typeof LayoutDashboard;
 }
 
-const adminNavItems: NavItem[] = [
+const fullNavItems: NavItem[] = [
   { path: ROUTES.dashboard, label: "Vue d'ensemble", icon: LayoutDashboard },
   { path: ROUTES.intervention, label: "Intervention rapide", icon: Zap },
+  { path: ROUTES.planning, label: "Planning", icon: Calendar },
   { path: ROUTES.families, label: "Familles", icon: Users },
   { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
   { path: ROUTES.aids, label: "Aides", icon: Gift },
@@ -46,9 +49,16 @@ const adminNavItems: NavItem[] = [
 const volunteerNavItems: NavItem[] = [
   { path: ROUTES.dashboard, label: "Mes actions", icon: ClipboardList },
   { path: ROUTES.intervention, label: "Intervention rapide", icon: Zap },
+  { path: ROUTES.planning, label: "Mes interventions", icon: Calendar },
   { path: ROUTES.families, label: "Familles", icon: Users },
   { path: ROUTES.needs, label: "Besoins", icon: AlertTriangle },
   { path: ROUTES.aids, label: "Aides", icon: Gift },
+];
+
+const auditorNavItems: NavItem[] = [
+  { path: ROUTES.dashboard, label: "Vue d'ensemble", icon: LayoutDashboard },
+  { path: ROUTES.families, label: "Familles", icon: Users },
+  { path: ROUTES.reports, label: "Rapports", icon: FileBarChart },
 ];
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -61,7 +71,7 @@ export default function Header() {
   const searchMobileRef = useRef<HTMLDivElement>(null);
   const searchOverlayRef = useRef<HTMLDivElement>(null);
   const overlayInputRef = useRef<HTMLInputElement>(null);
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, canAccessUsers, userRole } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { getCategoryLabel } = useCategories();
@@ -111,7 +121,15 @@ export default function Header() {
       searchResult.needs.length > 0 ||
       searchResult.aids.length > 0);
 
-  const navItems = isAdmin ? adminNavItems : volunteerNavItems;
+  const navItems = (() => {
+    if (userRole === "auditor") return auditorNavItems;
+    if (userRole === "volunteer") return volunteerNavItems;
+    // admin ou coordinator : menu complet, sans Utilisateurs pour coordinator
+    if (userRole === "coordinator") {
+      return fullNavItems.filter((item) => item.path !== ROUTES.users);
+    }
+    return fullNavItems;
+  })();
 
   const searchDropdownContent = (
     <>
@@ -248,7 +266,7 @@ export default function Header() {
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold text-foreground">SocialAid</h1>
               <p className="text-xs text-muted-foreground leading-none">
-                {isAdmin ? "Administration" : "Espace bénévole"}
+                {user ? USER_ROLE_LABELS[user.role] : "Espace bénévole"}
               </p>
             </div>
           </Link>
@@ -306,7 +324,7 @@ export default function Header() {
                     {user.name}
                   </p>
                   <p className={`text-xs mt-0.5 font-medium ${isAdmin ? "text-amber-600" : "text-blue-600"}`}>
-                    {isAdmin ? "Administrateur" : "Bénévole"}
+                    {user ? USER_ROLE_LABELS[user.role] : "Bénévole"}
                   </p>
                 </div>
                 <Button
@@ -383,7 +401,7 @@ export default function Header() {
                   <div className="text-sm">
                     <p className="font-medium">{user.name}</p>
                     <p className={`text-xs font-medium ${isAdmin ? "text-amber-600" : "text-blue-600"}`}>
-                      {isAdmin ? "Administrateur" : "Bénévole"}
+                      {user ? USER_ROLE_LABELS[user.role] : "Bénévole"}
                     </p>
                   </div>
                   <Button

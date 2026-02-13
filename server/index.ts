@@ -12,7 +12,7 @@ import {
   handleLogout,
   handleMe,
 } from "./routes/auth";
-import { handleInviteUser, handleCreateUser, handleUpdateUser, handleDeleteUser } from "./routes/users";
+import { handleInviteUser, handleCreateUser, handleUpdateUser, handleDeleteUser, handleGetAssignableUsers } from "./routes/users";
 import {
   handleGetFamilies,
   handleGetFamily,
@@ -43,6 +43,16 @@ import {
 } from "./routes/aids";
 import { handleGetNotes, handleCreateNote } from "./routes/notes";
 import {
+  handleGetInterventions,
+  handleGetMyInterventions,
+  handleGetIntervention,
+  handleCreateIntervention,
+  handleUpdateIntervention,
+  handleUpdateInterventionStatus,
+  handleUpdateInterventionChecklist,
+  handleDeleteIntervention,
+} from "./routes/interventions";
+import {
   handleGetDashboardStats,
   handleGetExportData,
 } from "./routes/dashboard";
@@ -61,7 +71,7 @@ import {
   handleAdjustArticleStock,
 } from "./routes/articles";
 import { handleSearch } from "./routes/search";
-import { handleGetAuditLogs, handlePruneAuditLogs } from "./routes/audit";
+import { handleGetAuditLogs, handlePruneAuditLogs, handleExportAuditLogs } from "./routes/audit";
 import { handleImportFamilies } from "./routes/import";
 import {
   handleGetFamilyDocuments,
@@ -122,18 +132,45 @@ const requireAuth: RequestHandler = (req, res, next) => {
   next();
 };
 
+/** Role type aligned with shared schema */
+type AppRole = "admin" | "coordinator" | "volunteer" | "auditor";
+
 /**
  * Requires the authenticated user to be an admin.
  * Must be used after requireAuth.
  */
 const requireAdmin: RequestHandler = (_req, res, next) => {
-  const user = res.locals.user;
+  const user = res.locals.user as { role?: AppRole } | undefined;
   if (!user || user.role !== "admin") {
     res.status(403).json({ error: "Accès réservé aux administrateurs" });
     return;
   }
   next();
 };
+
+/**
+ * Requires the authenticated user to have one of the given roles.
+ * Must be used after requireAuth.
+ */
+function requireRole(...allowed: AppRole[]): RequestHandler {
+  const set = new Set(allowed);
+  return (_req, res, next) => {
+    const user = res.locals.user as { role?: AppRole } | undefined;
+    if (!user || !set.has(user.role as AppRole)) {
+      res.status(403).json({
+        error:
+          allowed.length === 1
+            ? "Accès réservé"
+            : "Droits insuffisants pour cette action",
+      });
+      return;
+    }
+    next();
+  };
+}
+
+/** Auditeur = lecture seule ; les écritures sont réservées à admin, coordinateur, bénévole. */
+const requireCanWrite = requireRole("admin", "coordinator", "volunteer");
 
 export function createServer() {
   const app = express();
@@ -264,6 +301,18 @@ export function createServer() {
   app.get("/api/auth/me", requireAuth, asyncHandler(handleMe));
   app.post("/api/auth/logout", requireAuth, asyncHandler(handleLogout));
 
+  // Organisation courante (utilisateur connecté)
+  app.get("/api/organizations/current", requireAuth, (req, res) => {
+    const user = res.locals.user as { organizationId?: string } | undefined;
+    const orgId = user?.organizationId ?? "org-default";
+    const org = storage.getOrganization(orgId);
+    if (!org) {
+      res.status(404).json({ error: "Organisation non trouvée" });
+      return;
+    }
+    res.json(org);
+  });
+
   // Categories (public read, admin write)
   app.get("/api/categories", asyncHandler(handleGetCategories));
   app.post(
@@ -323,6 +372,12 @@ export function createServer() {
     requireAdmin,
     asyncHandler(handleGetUsers),
   );
+  app.get(
+    "/api/users/assignable",
+    requireAuth,
+    requireRole("admin", "coordinator"),
+    asyncHandler(handleGetAssignableUsers),
+  );
   app.post(
     "/api/users/invite",
     requireAuth,
@@ -350,14 +405,20 @@ export function createServer() {
   app.get(
     "/api/export",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleGetExportData),
   );
   app.get(
     "/api/audit-logs",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "auditor"),
     asyncHandler(handleGetAuditLogs),
+  );
+  app.get(
+    "/api/audit-logs/export",
+    requireAuth,
+    requireAdmin,
+    asyncHandler(handleExportAuditLogs),
   );
   app.post(
     "/api/audit-logs/prune",
@@ -368,7 +429,7 @@ export function createServer() {
   app.post(
     "/api/import/families",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleImportFamilies),
   );
 
@@ -382,15 +443,25 @@ export function createServer() {
   // Global search (authenticated)
   app.get("/api/search", requireAuth, asyncHandler(handleSearch));
 
-  // Families (authenticated, delete = admin only)
+  // Families (authenticated; écriture = admin, coordinateur, bénévole)
   app.get("/api/families", requireAuth, asyncHandler(handleGetFamilies));
-  app.post("/api/families", requireAuth, asyncHandler(handleCreateFamily));
+  app.post(
+    "/api/families",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleCreateFamily),
+  );
   app.get("/api/families/:id", requireAuth, asyncHandler(handleGetFamily));
-  app.put("/api/families/:id", requireAuth, asyncHandler(handleUpdateFamily));
+  app.put(
+    "/api/families/:id",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleUpdateFamily),
+  );
   app.delete(
     "/api/families/:id",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleDeleteFamily),
   );
   app.post(
@@ -406,7 +477,7 @@ export function createServer() {
     asyncHandler(handleResetAllFamilies),
   );
 
-  // Children (authenticated, delete = admin only)
+  // Children (authenticated, delete = admin ou coordinateur)
   app.get(
     "/api/families/:familyId/children",
     requireAuth,
@@ -415,34 +486,60 @@ export function createServer() {
   app.post(
     "/api/families/:familyId/children",
     requireAuth,
+    requireCanWrite,
     asyncHandler(handleCreateChild),
   );
-  app.put("/api/children/:id", requireAuth, asyncHandler(handleUpdateChild));
+  app.put(
+    "/api/children/:id",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleUpdateChild),
+  );
   app.delete(
     "/api/children/:id",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleDeleteChild),
   );
 
-  // Needs (authenticated, delete = admin only)
+  // Needs (authenticated; écriture = admin, coordinateur, bénévole)
   app.get("/api/needs", requireAuth, asyncHandler(handleGetNeeds));
-  app.post("/api/needs", requireAuth, asyncHandler(handleCreateNeed));
-  app.put("/api/needs/:id", requireAuth, asyncHandler(handleUpdateNeed));
-  app.delete("/api/needs/:id", requireAuth, requireAdmin, handleDeleteNeed);
+  app.post(
+    "/api/needs",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleCreateNeed),
+  );
+  app.put(
+    "/api/needs/:id",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleUpdateNeed),
+  );
+  app.delete(
+    "/api/needs/:id",
+    requireAuth,
+    requireRole("admin", "coordinator"),
+    handleDeleteNeed,
+  );
   app.get(
     "/api/families/:familyId/needs",
     requireAuth,
     asyncHandler(handleGetNeedsByFamily),
   );
 
-  // Aids (authenticated)
+  // Aids (authenticated; écriture = admin, coordinateur, bénévole)
   app.get("/api/aids", requireAuth, asyncHandler(handleGetAids));
-  app.post("/api/aids", requireAuth, asyncHandler(handleCreateAid));
+  app.post(
+    "/api/aids",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleCreateAid),
+  );
   app.delete(
     "/api/aids/:id",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleDeleteAid),
   );
   app.get(
@@ -451,7 +548,7 @@ export function createServer() {
     asyncHandler(handleGetAidsByFamily),
   );
 
-  // Visit Notes (authenticated)
+  // Visit Notes (authenticated; écriture = admin, coordinateur, bénévole)
   app.get(
     "/api/families/:familyId/notes",
     requireAuth,
@@ -460,32 +557,80 @@ export function createServer() {
   app.post(
     "/api/families/:familyId/notes",
     requireAuth,
+    requireCanWrite,
     asyncHandler(handleCreateNote),
   );
 
-  // Family Documents (admin only - documents souvent sensibles)
+  // Interventions (planning, missions assignées)
+  app.get(
+    "/api/interventions",
+    requireAuth,
+    asyncHandler(handleGetInterventions),
+  );
+  app.get(
+    "/api/interventions/mine",
+    requireAuth,
+    asyncHandler(handleGetMyInterventions),
+  );
+  app.get(
+    "/api/interventions/:id",
+    requireAuth,
+    asyncHandler(handleGetIntervention),
+  );
+  app.post(
+    "/api/interventions",
+    requireAuth,
+    requireRole("admin", "coordinator"),
+    asyncHandler(handleCreateIntervention),
+  );
+  app.put(
+    "/api/interventions/:id",
+    requireAuth,
+    requireRole("admin", "coordinator"),
+    asyncHandler(handleUpdateIntervention),
+  );
+  app.patch(
+    "/api/interventions/:id/status",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleUpdateInterventionStatus),
+  );
+  app.patch(
+    "/api/interventions/:id/checklist",
+    requireAuth,
+    requireCanWrite,
+    asyncHandler(handleUpdateInterventionChecklist),
+  );
+  app.delete(
+    "/api/interventions/:id",
+    requireAuth,
+    requireRole("admin", "coordinator"),
+    asyncHandler(handleDeleteIntervention),
+  );
+
+  // Family Documents (admin ou coordinateur)
   app.get(
     "/api/families/:familyId/documents",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleGetFamilyDocuments),
   );
   app.post(
     "/api/families/:familyId/documents",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleCreateFamilyDocument),
   );
   app.delete(
     "/api/families/:familyId/documents/:documentId",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleDeleteFamilyDocument),
   );
   app.get(
     "/api/families/:familyId/documents/:documentId/download",
     requireAuth,
-    requireAdmin,
+    requireRole("admin", "coordinator"),
     asyncHandler(handleGetFamilyDocumentDownloadUrl),
   );
 

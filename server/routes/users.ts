@@ -91,9 +91,12 @@ export const handleUpdateUser: RequestHandler = (req, res) => {
     return;
   }
 
-  // Prevent self-deactivation or self-demotion.
+  // Prevent self-deactivation or self-demotion (only admin can keep full access).
   if (actor?.id === targetId) {
-    if (parsed.data.active === false || parsed.data.role === "volunteer") {
+    if (
+      parsed.data.active === false ||
+      (parsed.data.role != null && parsed.data.role !== "admin")
+    ) {
       res.status(400).json({ error: "Impossible de modifier votre propre accès" });
       return;
     }
@@ -152,9 +155,11 @@ export const handleDeleteUser: RequestHandler = (req, res) => {
     return;
   }
 
-  // Empêcher la suppression des administrateurs (seulement les bénévoles peuvent être supprimés)
+  // Seuls les comptes non-admin peuvent être supprimés (admin = protégé).
   if (target.role === "admin") {
-    res.status(403).json({ error: "Impossible de supprimer un compte administrateur" });
+    res.status(403).json({
+      error: "Impossible de supprimer un compte administrateur",
+    });
     return;
   }
 
@@ -176,4 +181,12 @@ export const handleDeleteUser: RequestHandler = (req, res) => {
   }
 
   res.json({ success: true });
+};
+
+/** Liste minimale des utilisateurs assignables (admin + coordinateur, pour planning interventions). */
+export const handleGetAssignableUsers: RequestHandler = (req, res) => {
+  const user = (res as any).locals?.user as { organizationId: string } | undefined;
+  const orgId = user?.organizationId ?? "org-default";
+  const users = storage.getAllUsers(orgId);
+  res.json(users.map((u) => ({ id: u.id, name: u.name, role: u.role })));
 };

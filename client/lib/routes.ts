@@ -6,6 +6,8 @@ export const ROUTES = {
   acceptInvite: "/accept-invite",
   dashboard: "/dashboard",
   intervention: "/intervention",
+  planning: "/planning",
+  interventionDetail: "/planning/:id",
   families: "/families",
   familyDetail: "/families/:id",
   needs: "/needs",
@@ -29,5 +31,9 @@ export function aidsAddForNeedRoute(params: { familyId: string | number; type: s
     type: params.type,
   });
   return `${ROUTES.aids}?${search.toString()}`;
+}
+
+export function interventionDetailRoute(id: string | number) {
+  return `/planning/${id}`;
 }
 

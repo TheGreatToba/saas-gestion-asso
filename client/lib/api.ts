@@ -329,6 +329,10 @@ export const api = {
 
   // Users
   getUsers: () => fetchJson<User[]>("/api/users"),
+  getAssignableUsers: () =>
+    fetchJson<{ id: string; name: string; role: string }[]>(
+      "/api/users/assignable",
+    ),
 
   inviteUser: (data: import("@shared/schema").InviteUserInput) =>
     fetchJson<{ user: User; message: string }>("/api/users/invite", {
@@ -418,4 +422,68 @@ export const api = {
       `/api/families/${familyId}/documents/${documentId}`,
       { method: "DELETE" },
     ),
+
+  // Interventions (planning)
+  getInterventions: (params?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    assignedUserId?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    if (params?.status) sp.set("status", params.status);
+    if (params?.assignedUserId) sp.set("assignedUserId", params.assignedUserId);
+    const q = sp.toString();
+    return fetchJson<{
+      items: import("@shared/schema").Intervention[];
+      total: number;
+    }>(q ? `/api/interventions?${q}` : "/api/interventions");
+  },
+  getMyInterventions: (params?: { status?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    const q = sp.toString();
+    return fetchJson<import("@shared/schema").Intervention[]>(
+      q ? `/api/interventions/mine?${q}` : "/api/interventions/mine",
+    );
+  },
+  getIntervention: (id: string) =>
+    fetchJson<import("@shared/schema").Intervention>(`/api/interventions/${id}`),
+  createIntervention: (
+    data: import("@shared/schema").CreateInterventionInput,
+  ) =>
+    fetchJson<import("@shared/schema").Intervention>("/api/interventions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateIntervention: (
+    id: string,
+    data: import("@shared/schema").UpdateInterventionInput,
+  ) =>
+    fetchJson<import("@shared/schema").Intervention>(
+      `/api/interventions/${id}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    ),
+  updateInterventionStatus: (
+    id: string,
+    status: "todo" | "in_progress" | "done",
+  ) =>
+    fetchJson<import("@shared/schema").Intervention>(
+      `/api/interventions/${id}/status`,
+      { method: "PATCH", body: JSON.stringify({ status }) },
+    ),
+  updateInterventionChecklist: (
+    id: string,
+    checklist: import("@shared/schema").InterventionChecklistItem[],
+  ) =>
+    fetchJson<import("@shared/schema").Intervention>(
+      `/api/interventions/${id}/checklist`,
+      { method: "PATCH", body: JSON.stringify({ checklist }) },
+    ),
+  deleteIntervention: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/interventions/${id}`, {
+      method: "DELETE",
+    }),
 };

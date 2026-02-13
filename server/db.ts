@@ -317,6 +317,58 @@ function runMigrations(database: Database.Database): void {
     `);
     database.prepare("UPDATE _schema_version SET version = 3").run();
   }
+
+  // Migration: RBAC 4 rôles (admin, coordinator, volunteer, auditor)
+  const versionRow3 = database.prepare("SELECT version FROM _schema_version").get() as { version: number } | undefined;
+  const schemaVersion3 = versionRow3?.version ?? 0;
+  if (schemaVersion3 < 4) {
+    database.exec("PRAGMA foreign_keys = OFF");
+    database.exec(`
+      CREATE TABLE users_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL CHECK (role IN ('admin', 'coordinator', 'volunteer', 'auditor')),
+        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+        organization_id TEXT
+      );
+      INSERT INTO users_new SELECT id, name, email, role, active, organization_id FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    database.exec("PRAGMA foreign_keys = ON");
+    database.prepare("CREATE INDEX IF NOT EXISTS idx_users_organization ON users(organization_id)").run();
+    database.prepare("UPDATE _schema_version SET version = 4").run();
+  }
+
+  // Migration: module interventions (missions assignées, statuts, checklist)
+  const versionRow4 = database.prepare("SELECT version FROM _schema_version").get() as { version: number } | undefined;
+  const schemaVersion4 = versionRow4?.version ?? 0;
+  if (schemaVersion4 < 5) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS interventions (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        family_id TEXT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+        assigned_user_id TEXT NOT NULL,
+        assigned_user_name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('todo', 'in_progress', 'done')),
+        planned_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        checklist_json TEXT NOT NULL DEFAULT '[]',
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_interventions_organization ON interventions(organization_id);
+      CREATE INDEX IF NOT EXISTS idx_interventions_family ON interventions(family_id);
+      CREATE INDEX IF NOT EXISTS idx_interventions_assigned ON interventions(assigned_user_id);
+      CREATE INDEX IF NOT EXISTS idx_interventions_planned ON interventions(planned_at);
+      CREATE INDEX IF NOT EXISTS idx_interventions_status ON interventions(status);
+    `);
+    database.prepare("UPDATE _schema_version SET version = 5").run();
+  }
 }
 
 function now(): string {
@@ -340,19 +392,21 @@ function seedIfEmpty(database: Database.Database): void {
     .get() as { c: number };
   if (userCount.c > 0) return;
 
+  const orgDefault = "org-default";
   const insUser = database.prepare(
-    "INSERT INTO users (id, name, email, role) VALUES (?, ?, ?, ?)",
+    "INSERT INTO users (id, name, email, role, active, organization_id) VALUES (?, ?, ?, ?, 1, ?)",
   );
   const insPass = database.prepare(
     "INSERT INTO passwords (user_id, password) VALUES (?, ?)",
   );
-  insUser.run("usr-admin", "Administrateur", "admin@socialaid.org", "admin");
+  insUser.run("usr-admin", "Administrateur", "admin@socialaid.org", "admin", orgDefault);
   insPass.run("usr-admin", hashPassword("admin123"));
   insUser.run(
     "usr-vol1",
     "Fatima Mansouri",
     "fatima@socialaid.org",
     "volunteer",
+    orgDefault,
   );
   insPass.run("usr-vol1", hashPassword("volunteer123"));
   insUser.run(
@@ -360,6 +414,7 @@ function seedIfEmpty(database: Database.Database): void {
     "Mohamed Kaddouri",
     "mohamed@socialaid.org",
     "volunteer",
+    orgDefault,
   );
   insPass.run("usr-vol2", hashPassword("volunteer123"));
 

@@ -12,8 +12,21 @@ export type Organization = z.infer<typeof OrganizationSchema>;
 
 // ============ USERS & AUTH ============
 
-export const UserRole = z.enum(["admin", "volunteer"]);
+export const UserRole = z.enum([
+  "admin",
+  "coordinator",
+  "volunteer",
+  "auditor",
+]);
 export type UserRole = z.infer<typeof UserRole>;
+
+/** Libellés des rôles pour l’UI */
+export const USER_ROLE_LABELS: Record<z.infer<typeof UserRole>, string> = {
+  admin: "Administrateur",
+  coordinator: "Coordinateur",
+  volunteer: "Bénévole",
+  auditor: "Auditeur",
+};
 
 export const UserSchema = z.object({
   id: z.string(),
@@ -405,7 +418,7 @@ export const CHILD_SEX_LABELS: Record<ChildSex, string> = {
 
 // ============ AUDIT LOG ============
 
-export const AuditAction = z.enum(["created", "updated", "deleted"]);
+export const AuditAction = z.enum(["created", "updated", "deleted", "invited"]);
 export type AuditAction = z.infer<typeof AuditAction>;
 
 export const AuditEntityType = z.enum([
@@ -417,8 +430,61 @@ export const AuditEntityType = z.enum([
   "category",
   "article",
   "user",
+  "intervention",
 ]);
 export type AuditEntityType = z.infer<typeof AuditEntityType>;
+
+// ============ INTERVENTION (workflow mission bénévole) ============
+
+export const InterventionStatus = z.enum(["todo", "in_progress", "done"]);
+export type InterventionStatus = z.infer<typeof InterventionStatus>;
+
+export const INTERVENTION_STATUS_LABELS: Record<InterventionStatus, string> = {
+  todo: "À faire",
+  in_progress: "En cours",
+  done: "Terminée",
+};
+
+/** Élément de checklist (étape à cocher). */
+export const InterventionChecklistItemSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  done: z.boolean().default(false),
+});
+export type InterventionChecklistItem = z.infer<typeof InterventionChecklistItemSchema>;
+
+export const InterventionSchema = z.object({
+  id: z.string(),
+  familyId: z.string(),
+  assignedUserId: z.string(),
+  assignedUserName: z.string(),
+  status: InterventionStatus,
+  plannedAt: z.string(),
+  startedAt: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+  checklist: z.array(InterventionChecklistItemSchema).optional().default([]),
+  notes: z.string().optional().default(""),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Intervention = z.infer<typeof InterventionSchema>;
+
+export const CreateInterventionSchema = z.object({
+  familyId: z.string().min(1, "Famille requise"),
+  assignedUserId: z.string().min(1, "Bénévole assigné requis"),
+  plannedAt: z.string().min(1, "Date prévue requise"),
+  checklist: z.array(InterventionChecklistItemSchema).optional().default([]),
+  notes: z.string().optional().default(""),
+});
+export type CreateInterventionInput = z.infer<typeof CreateInterventionSchema>;
+
+export const UpdateInterventionSchema = z.object({
+  assignedUserId: z.string().optional(),
+  plannedAt: z.string().optional(),
+  checklist: z.array(InterventionChecklistItemSchema).optional(),
+  notes: z.string().optional(),
+});
+export type UpdateInterventionInput = z.infer<typeof UpdateInterventionSchema>;
 
 export const AuditLogSchema = z.object({
   id: z.string(),
