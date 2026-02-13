@@ -1,0 +1,157 @@
+# État d'avancement vs roadmap (contexte.txt + ROADMAP-ETAPES-RESTANTES.md)
+
+Comparaison avec le code actuel du projet.
+
+================================================================================
+CE QUI EST FAIT
+================================================================================
+
+--- Priorité 1 – Urgent ---
+
+1.1 Vérification email à l'inscription
+  - Table email_verification_tokens (db.ts)
+  - handleRegister avec active: false + envoi email (auth.ts)
+  - handleConfirmEmail, GET /api/auth/confirm-email
+  - Page ConfirmEmail.tsx + route dans App
+  - server/email.ts (sendConfirmEmailEmail), .env.example (FRONTEND_URL, SMTP_*)
+
+1.2 Invitation par admin
+  - Table invitations, POST /api/users/invite
+  - handleAcceptInvite (POST /api/auth/accept-invite)
+  - createUserForInvite, createInvitationToken, consumeInvitationToken dans storage
+  - Page AcceptInvite.tsx, page Users avec bouton "Inviter" et formulaire email + rôle
+  - Email d'invitation dans server/email.ts
+
+1.3 Rate limit Redis
+  - server/rate-limit-redis.ts (implémentation Redis de l'interface)
+  - server/index.ts : si RATE_LIMIT_REDIS_URL → createRedisRateLimitStore + setRateLimitStore
+  - .env.example documenté
+
+--- Priorité 2 – Important ---
+
+2.1 Refactor storage (repositories)
+  - storage.ts utilise FamiliesRepository, FamilyService, ChildrenRepository,
+    NeedsRepository, AidsRepository, UsersRepository, InterventionsRepository
+  - Délégation claire (auth, users, families, needs, aids, children, interventions)
+
+2.2 RBAC 4 rôles
+  - shared/schema.ts : UserRole = admin, coordinator, volunteer, auditor + USER_ROLE_LABELS
+  - Migration DB (version 4) avec CHECK 4 rôles
+  - requireRole(...), requireCanWrite, routes protégées selon rôle
+  - docs/ROLES-PERMISSIONS.md
+  - Front : Header avec userRole → fullNavItems / volunteerNavItems / auditorNavItems
+    (Utilisateurs masqué pour coordinator)
+  - Users.tsx : USER_ROLE_LABELS pour affichage et sélection des 4 rôles
+  - Auth : canAccessUsers, canAccessAudit, userRole
+
+2.3 Multi-tenant (isolation)
+  - organization_id utilisé dans les routes (aids, audit, children, documents,
+    families, interventions, needs, users, etc.)
+  - Pas de fuite évidente
+  - Manquant (optionnel) : GET /api/organizations/current, page "Paramètres Association"
+
+2.4 UX mobile intervention
+  - Page Intervention.tsx, CTA "Intervention rapide" dans Header (desktop + mobile)
+    et Dashboard
+  - À renforcer : revue text-xs → text-sm sur Intervention, FamilyDetail, listes ;
+    simplification du flux mobile (tests viewport étroit)
+
+2.5 Observabilité (metrics + export audit)
+  - server/metrics.ts + endpoint /api/metrics (admin)
+  - Export audit : GET /api/audit-logs/export?from=...&to=...&format=csv|json
+    dans server/routes/audit.ts (handleExportAuditLogs)
+
+--- Priorité 3 – Futur ---
+
+3.1 Module interventions
+  - Table interventions (migration v5), server/repositories/interventions.repository.ts,
+    server/routes/interventions.ts (CRUD, statut, checklist, "mes interventions")
+  - Front : Planning.tsx, InterventionDetail.tsx, Intervention.tsx, routes /planning,
+    /planning/:id, API client dans api.ts
+
+================================================================================
+CE QU'IL RESTE À FAIRE (résumé)
+================================================================================
+
+--- Priorité 1 – Urgent ---
+  Rien de critique : 1.1, 1.2, 1.3 sont faits.
+
+--- Priorité 2 – Important (à finaliser / renforcer) ---
+
+1. Multi-tenant (2.3)
+   - Audit systématique des routes : s'assurer que toute lecture/écriture
+     (famille, besoin, aide, user, etc.) filtre bien par organizationId du user.
+   - Optionnel : GET /api/organizations/current pour afficher le nom de l'association.
+   - Optionnel : page "Paramètres Association" (nom, logo) réservée admin.
+
+2. UX mobile intervention (2.4)
+   - Tester le parcours sur mobile (ou viewport étroit) : "trouver famille →
+     enregistrer aide" en moins d'actions.
+   - Remplacer les text-xs par text-sm (ou plus) sur Intervention, FamilyDetail
+     et listes pour la lisibilité terrain.
+   - CTA "Intervention rapide" déjà bien visible (sidebar, dashboard).
+
+3. Refactor storage (2.1)
+   - Les principaux agrégats passent déjà par des repositories.
+   - Optionnel : extraire audit.repository.ts et documents.repository.ts
+     (ou laisser dans storage pour l'instant).
+   - Categories/Articles : idem, à extraire seulement si homogénéisation complète.
+
+--- Priorité 3 – Futur ---
+
+4. KPI métier (roadmap 3.2)
+   - Délai moyen besoin → première aide, répartition par zone/bénévole,
+     alertes "famille sans visite depuis X jours".
+   - Backend : requêtes agrégées (ou endpoints dédiés). Front : graphiques
+     (ex. Recharts) sur Reports ou Dashboard.
+
+5. Conformité RGPD (roadmap 3.3)
+   - Export des données personnelles (famille + documents) pour portabilité/effacement.
+   - Endpoint "effacer famille" (anonymisation ou suppression + audit).
+   - Optionnel : journal des accès aux fiches familles/documents si exigence légale.
+
+--- Autres points du contexte (hors roadmap détaillée) ---
+
+  - Auth cookie-only : login renvoie déjà le token en cookie HttpOnly ; pas de
+    retour du token en JSON côté register (session). À confirmer qu'aucun autre
+    endpoint ne renvoie de token dans le body.
+  - Pagination : déjà en place sur plusieurs listes (ex. interventions, audit).
+    À vérifier partout où des listes volumineuses existent (familles, besoins,
+    aides, recherche).
+  - Antivirus documents : hook présent mais no-op ; à brancher sur un service
+    réel + validation MIME/magic bytes.
+  - Sauvegarde / restauration + rétention audit : documenter
+    (ex. docs/SAUVEGARDE-RESTAURATION.md) si pas déjà fait.
+  - ALLOW_PUBLIC_REGISTRATION : non vu dans le code ; la roadmap suggérait de
+    pouvoir désactiver l'inscription publique (tout par invitation). À ajouter
+    si besoin produit.
+
+================================================================================
+TABLEAU RÉCAPITULATIF
+================================================================================
+
+  #  Étape roadmap                    Fait  Partiel  À faire
+  --  ------------------------------  ----  -------  ------
+  1   Vérification email               oui
+  2   Invitation par admin             oui
+  3   Rate limit Redis                 oui
+  4   Refactor storage (repos)         oui            (audit/documents/categories optionnel)
+  5   RBAC 4 rôles                     oui
+  6   Audit multi-tenant (isolation)         oui      Vérifier toutes les routes + optionnel org/current et page paramètres
+  7   UX mobile intervention                oui      Tests mobile + taille de texte (text-xs → text-sm)
+  8   Observabilité (metrics + export) oui
+  9   Module interventions             oui
+  10  KPI métier + RGPD                                    À faire (Priorité 3)
+
+================================================================================
+CONCLUSION
+================================================================================
+
+Priorité 1 (urgent) : entièrement couverte.
+Refactor repositories et RBAC 4 rôles : faits.
+Module interventions et export audit : faits.
+Reste à finaliser : isolation multi-tenant (audit + optionnel org/paramètres),
+UX mobile intervention (tests + typo), puis KPI métier et RGPD en Priorité 3.
+
+Document généré à partir de ROADMAP-ETAPES-RESTANTES.md, contexte.txt et de
+l'état actuel du code. À mettre à jour au fur et à mesure des livraisons.

@@ -9,6 +9,10 @@ import {
 } from "../object-storage";
 import { validateMagicBytes } from "../document-validation";
 
+function getOrgId(res: any): string {
+  return (res.locals?.user as { organizationId?: string } | undefined)?.organizationId ?? "org-default";
+}
+
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024; // ~5Mo
 const ALLOWED_MIME_PREFIXES = ["image/", "application/pdf"];
 
@@ -27,7 +31,13 @@ function estimateBase64Size(base64: string): number {
 }
 
 export const handleGetFamilyDocuments: RequestHandler = async (req, res) => {
-  const docs = storage.getDocumentsByFamily(req.params.familyId as string);
+  const orgId = getOrgId(res);
+  const familyId = req.params.familyId as string;
+  if (!storage.getFamily(orgId, familyId)) {
+    res.status(404).json({ error: "Famille non trouvée" });
+    return;
+  }
+  const docs = storage.getDocumentsByFamily(familyId);
 
   const docsWithUrls = await Promise.all(
     docs.map(async (doc) => {
@@ -48,6 +58,12 @@ export const handleGetFamilyDocuments: RequestHandler = async (req, res) => {
 };
 
 export const handleCreateFamilyDocument: RequestHandler = async (req, res) => {
+  const orgId = getOrgId(res);
+  const familyId = req.params.familyId as string;
+  if (!storage.getFamily(orgId, familyId)) {
+    res.status(404).json({ error: "Famille non trouvée" });
+    return;
+  }
   const parsed = CreateFamilyDocumentSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
@@ -57,7 +73,8 @@ export const handleCreateFamilyDocument: RequestHandler = async (req, res) => {
     return;
   }
 
-  const { fileData, mimeType, familyId, name, documentType } = parsed.data;
+  const { fileData, mimeType, name, documentType } = parsed.data;
+  // Utiliser la famille validée (params) pour éviter toute fuite multi-tenant
 
   // Autorisation MIME basique
   if (!ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix))) {
@@ -148,7 +165,12 @@ export const handleCreateFamilyDocument: RequestHandler = async (req, res) => {
 };
 
 export const handleGetFamilyDocumentDownloadUrl: RequestHandler = async (req, res) => {
+  const orgId = getOrgId(res);
   const { familyId, documentId } = req.params as { familyId: string; documentId: string };
+  if (!storage.getFamily(orgId, familyId)) {
+    res.status(404).json({ error: "Famille non trouvée" });
+    return;
+  }
   const doc = storage.getFamilyDocument(documentId);
   if (!doc || doc.familyId !== familyId) {
     res.status(404).json({ error: "Document non trouvé" });
@@ -169,8 +191,14 @@ export const handleGetFamilyDocumentDownloadUrl: RequestHandler = async (req, re
 };
 
 export const handleDeleteFamilyDocument: RequestHandler = async (req, res) => {
-  const doc = storage.getFamilyDocument(req.params.documentId as string);
-  const success = storage.deleteFamilyDocument(req.params.documentId as string);
+  const orgId = getOrgId(res);
+  const documentId = req.params.documentId as string;
+  const doc = storage.getFamilyDocument(documentId);
+  if (doc && !storage.getFamily(orgId, doc.familyId)) {
+    res.status(404).json({ error: "Document non trouvé" });
+    return;
+  }
+  const success = storage.deleteFamilyDocument(documentId);
   if (!success) {
     res.status(404).json({ error: "Document non trouvé" });
     return;

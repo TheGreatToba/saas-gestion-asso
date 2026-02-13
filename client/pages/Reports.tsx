@@ -103,7 +103,7 @@ const FIELD_ALIASES: Record<FieldKey, string[]> = {
 };
 
 export default function Reports() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canAccessAudit } = useAuth();
   const queryClient = useQueryClient();
   const { categories, getCategoryLabel } = useCategories();
   const [exporting, setExporting] = useState(false);
@@ -161,7 +161,7 @@ export default function Reports() {
   const { data: auditLogs = [] } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: () => api.getAuditLogs(100),
-    enabled: !!isAdmin,
+    enabled: !!canAccessAudit,
   });
 
   const normalizePhone = (value?: string) => (value ?? "").replace(/\D/g, "");
@@ -920,8 +920,8 @@ export default function Reports() {
           </div>
         )}
 
-        {/* Audit log (admin only) */}
-        {isAdmin && (
+        {/* Audit log (admin ou auditeur) */}
+        {canAccessAudit && (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <History className="w-5 h-5" />

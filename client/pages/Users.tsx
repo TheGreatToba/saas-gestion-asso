@@ -24,7 +24,14 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/components/ui/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { CreateUserInput, UpdateUserInput, InviteUserInput, User as UserType } from "@shared/schema";
+import type {
+  CreateUserInput,
+  UpdateUserInput,
+  InviteUserInput,
+  User as UserType,
+  UserRole,
+} from "@shared/schema";
+import { USER_ROLE_LABELS } from "@shared/schema";
 
 const emptyInviteForm: InviteUserInput = {
   email: "",
@@ -249,7 +256,7 @@ export default function Users() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-foreground">{u.name}</p>
                       <Badge variant="outline" className="text-xs">
-                        {u.role === "admin" ? "Admin" : "Bénévole"}
+                        {USER_ROLE_LABELS[u.role]}
                       </Badge>
                       <Badge
                         variant="outline"
@@ -295,14 +302,14 @@ export default function Users() {
                       <Power className="w-4 h-4" />
                       {u.active ? "Désactiver" : "Activer"}
                     </Button>
-                    {u.role === "volunteer" && currentUser?.id !== u.id && (
+                    {u.role !== "admin" && currentUser?.id !== u.id && (
                       <Button
                         variant="outline"
                         size="sm"
                         className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                         onClick={() => setDeleteUser(u)}
                         disabled={deleteMutation.isPending}
-                        title="Supprimer le compte bénévole"
+                        title="Supprimer le compte"
                       >
                         <Trash2 className="w-4 h-4" />
                         Supprimer
@@ -353,7 +360,7 @@ export default function Users() {
                 <Label>Rôle *</Label>
                 <Select
                   value={form.role}
-                  onValueChange={(v: "admin" | "volunteer") =>
+                  onValueChange={(v: UserRole) =>
                     setForm({ ...form, role: v })
                   }
                 >
@@ -361,8 +368,11 @@ export default function Users() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="volunteer">Bénévole</SelectItem>
-                    <SelectItem value="admin">Administrateur</SelectItem>
+                    {(Object.keys(USER_ROLE_LABELS) as UserRole[]).map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {USER_ROLE_LABELS[role]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -456,7 +466,7 @@ export default function Users() {
                 <Label>Rôle *</Label>
                 <Select
                   value={inviteForm.role}
-                  onValueChange={(v: "admin" | "volunteer") =>
+                  onValueChange={(v: UserRole) =>
                     setInviteForm({ ...inviteForm, role: v })
                   }
                 >
@@ -464,8 +474,11 @@ export default function Users() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="volunteer">Bénévole</SelectItem>
-                    <SelectItem value="admin">Administrateur</SelectItem>
+                    {(Object.keys(USER_ROLE_LABELS) as UserRole[]).map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {USER_ROLE_LABELS[role]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

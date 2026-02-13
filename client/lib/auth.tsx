@@ -13,8 +13,8 @@ import { api, getCsrfToken } from "@/lib/api";
 interface AuthContextType {
   user: User | null;
   login: (
-    email: string,
-    password: string,
+  email: string,
+  password: string,
   ) => Promise<{ success: boolean; error?: string }>;
   register: (data: {
     name: string;
@@ -24,6 +24,12 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
+  /** Accès à la gestion des utilisateurs (admin uniquement). */
+  canAccessUsers: boolean;
+  /** Accès au journal d’audit (admin ou auditeur). */
+  canAccessAudit: boolean;
+  /** Rôle de l’utilisateur (admin, coordinator, volunteer, auditor). */
+  userRole: User["role"];
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -159,9 +165,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = user?.role === "admin";
+  const canAccessUsers = user?.role === "admin";
+  const canAccessAudit =
+    user?.role === "admin" || user?.role === "auditor";
+  const userRole = user?.role ?? "volunteer";
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading, isAdmin }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        register,
+        logout,
+        isLoading,
+        isAdmin,
+        canAccessUsers,
+        canAccessAudit,
+        userRole,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

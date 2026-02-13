@@ -78,6 +78,27 @@ function AdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* CTA Intervention rapide */}
+      <Link
+        to="/intervention"
+        className="block mb-6 rounded-xl border-2 border-primary bg-primary/5 hover:bg-primary/10 p-5 transition-colors"
+      >
+        <div className="flex items-center gap-4">
+          <div className="bg-primary p-3 rounded-lg shrink-0">
+            <Zap className="w-8 h-8 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-foreground">
+              Intervention rapide
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Trouver une famille → Enregistrer une aide ou une note
+            </p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-primary shrink-0" />
+        </div>
+      </Link>
+
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">
@@ -405,6 +426,27 @@ function VolunteerDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* CTA Intervention rapide (mobile-first, 1 clic) */}
+      <Link
+        to="/intervention"
+        className="block mb-6 rounded-xl border-2 border-primary bg-primary/5 hover:bg-primary/10 p-5 transition-colors"
+      >
+        <div className="flex items-center gap-4">
+          <div className="bg-primary p-3 rounded-lg shrink-0">
+            <Zap className="w-8 h-8 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-foreground">
+              Intervention rapide
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Trouver une famille → Enregistrer une aide ou une note
+            </p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-primary shrink-0" />
+        </div>
+      </Link>
+
       {/* Welcome */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
@@ -415,7 +457,7 @@ function VolunteerDashboard() {
             <h1 className="text-2xl font-bold text-foreground">
               Bonjour {user?.name} !
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm sm:text-base">
               Espace bénévole — Que souhaitez-vous faire aujourd'hui ?
             </p>
           </div>

@@ -85,8 +85,10 @@ export default function Intervention() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Intervention rapide</h1>
-        <p className="text-muted-foreground text-sm mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground mb-2">
+          Intervention rapide
+        </h1>
+        <p className="text-muted-foreground text-sm sm:text-base mb-6">
           Recherchez une famille puis enregistrez une aide ou une note.
         </p>
 
@@ -97,7 +99,7 @@ export default function Intervention() {
             placeholder="Nom, téléphone, adresse..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-10 h-12 text-base"
+            className="pl-10 h-12 sm:h-11 text-base min-h-[44px]"
             aria-label="Rechercher une famille"
           />
         </div>
@@ -122,16 +124,17 @@ export default function Intervention() {
                         to={familyDetailRoute(f.id)}
                         className="flex-1 min-w-0"
                       >
-                        <p className="font-medium text-foreground truncate">
+                        <p className="font-medium text-foreground text-sm sm:text-base truncate">
                           {f.number > 0 ? `Famille N° ${f.number}` : "Famille"} — {f.responsibleName || "—"}
                         </p>
                         {f.address && (
-                          <p className="text-sm text-muted-foreground truncate">{f.address}</p>
+                          <p className="text-sm text-muted-foreground truncate mt-0.5">{f.address}</p>
                         )}
                       </Link>
                       <Button
                         size="sm"
                         variant={selectedFamily?.id === f.id ? "default" : "outline"}
+                        className="min-h-[44px] shrink-0"
                         onClick={() => setSelectedFamily(selectedFamily?.id === f.id ? null : f)}
                       >
                         {selectedFamily?.id === f.id ? "Sélectionnée" : "Sélectionner"}
@@ -147,25 +150,25 @@ export default function Intervention() {
         {/* Quick actions (when family selected) */}
         {selectedFamily && (
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm sm:text-base font-medium text-foreground">
               Famille N° {selectedFamily.number} — {selectedFamily.responsibleName || "—"}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Button
                 size="lg"
-                className="h-auto py-6 flex flex-col gap-2"
+                className="h-auto min-h-[52px] py-5 flex flex-col gap-2 text-sm sm:text-base"
                 onClick={() => setShowAidDialog(true)}
               >
-                <Gift className="w-8 h-8" />
+                <Gift className="w-8 h-8 shrink-0" />
                 <span>Enregistrer une aide</span>
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="h-auto py-6 flex flex-col gap-2"
+                className="h-auto min-h-[52px] py-5 flex flex-col gap-2 text-sm sm:text-base"
                 onClick={() => setShowNoteDialog(true)}
               >
-                <FileText className="w-8 h-8" />
+                <FileText className="w-8 h-8 shrink-0" />
                 <span>Ajouter une note</span>
               </Button>
             </div>
@@ -179,7 +182,7 @@ export default function Intervention() {
         )}
 
         {!selectedFamily && debouncedQ.length < 2 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-muted-foreground text-sm">
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-muted-foreground text-sm sm:text-base">
             Saisissez au moins 2 caractères pour rechercher une famille.
           </div>
         )}
